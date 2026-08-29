@@ -61,6 +61,18 @@ def download_bytes(key: str) -> bytes:
     return resp["Body"].read()
 
 
+def download_to_path(key: str, dest_path: str) -> str:
+    """Stream an object to a local file path and return that path."""
+    _client().download_file(settings.STORAGE_BUCKET, key, dest_path)
+    return dest_path
+
+
+def upload_file(key: str, path: str, content_type: str = "application/octet-stream") -> str:
+    """Upload a local file by path."""
+    with open(path, "rb") as fh:
+        return upload_fileobj(key, fh, content_type)
+
+
 def object_exists(key: str) -> bool:
     from botocore.exceptions import ClientError
 
