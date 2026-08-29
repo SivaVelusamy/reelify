@@ -2,6 +2,7 @@
 
 import logging
 from typing import BinaryIO
+from urllib.parse import urlparse
 
 import boto3
 from botocore.client import Config as BotoConfig
@@ -18,8 +19,28 @@ def _client(endpoint: str | None = None):
         aws_access_key_id=settings.STORAGE_ACCESS_KEY,
         aws_secret_access_key=settings.STORAGE_SECRET_KEY,
         region_name=settings.STORAGE_REGION,
-        config=BotoConfig(signature_version="s3v4"),
+        config=BotoConfig(
+            signature_version="s3v4",
+            s3={"addressing_style": "path"},
+        ),
     )
+
+
+def _public_endpoint() -> str | None:
+    """Endpoint to sign browser-facing URLs against, or None to reuse the
+    internal one. Resolves the special value "auto" to https://s3.<public-host>.
+    """
+    configured = settings.STORAGE_PUBLIC_ENDPOINT.strip()
+    if not configured:
+        return None
+    if configured.lower() != "auto":
+        return configured
+    from app.public_url import public_base_url
+
+    host = urlparse(public_base_url()).hostname or ""
+    if not host or "localhost" in host or host.startswith("127."):
+        return None  # nothing sensible to derive locally
+    return f"https://s3.{host}"
 
 
 def upload_fileobj(
@@ -39,15 +60,11 @@ def upload_fileobj(
 def generate_presigned_url(key: str, ttl: int | None = None) -> str:
     """Return a time-limited signed GET URL the browser can fetch directly.
 
-    Signed against STORAGE_PUBLIC_ENDPOINT when set (e.g. http://localhost:9000
-    in local Docker), otherwise STORAGE_ENDPOINT.
+    Signed against the resolved public endpoint (see ``_public_endpoint``),
+    otherwise the internal ``STORAGE_ENDPOINT``.
     """
     expires = ttl if ttl is not None else settings.SIGNED_URL_TTL_SECONDS
-    client = (
-        _client(settings.STORAGE_PUBLIC_ENDPOINT)
-        if settings.STORAGE_PUBLIC_ENDPOINT
-        else _client()
-    )
+    client = _client(_public_endpoint())
     return client.generate_presigned_url(
         "get_object",
         Params={"Bucket": settings.STORAGE_BUCKET, "Key": key},

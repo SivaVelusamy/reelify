@@ -29,10 +29,15 @@ class Settings(BaseSettings):
 
     # Object storage (S3-compatible)
     STORAGE_ENDPOINT: str = "http://localhost:9000"
-    # Endpoint the *browser* must use to fetch presigned URLs. In Docker the
-    # backend talks to "http://storage:9000" internally, but a download link
-    # handed to the browser has to resolve from the host. Leave empty to reuse
-    # STORAGE_ENDPOINT (correct for real S3 or a non-Docker MinIO).
+    # Endpoint the *browser* must use to fetch presigned URLs. The backend talks
+    # to STORAGE_ENDPOINT internally, but a download link handed to the browser
+    # has to resolve publicly. Options:
+    #   ""      -> reuse STORAGE_ENDPOINT (fine for real AWS S3)
+    #   "auto"  -> https://s3.<public-host>  (derived from PUBLIC_BASE_URL)
+    #   a URL   -> e.g. https://s3.reelify.example.com
+    # When you use a subdomain, your reverse proxy for it must forward to the
+    # storage service AND preserve the Host header (the presigned signature
+    # covers it). Path-style addressing is always used.
     STORAGE_PUBLIC_ENDPOINT: str = ""
     STORAGE_BUCKET: str = "reelify-media"
     STORAGE_ACCESS_KEY: str = "minioadmin"

@@ -107,7 +107,7 @@ class _FakeTask:
 def _patch_externals(monkeypatch):
     mock_s3 = MagicMock()
     mock_s3.generate_presigned_url.return_value = "https://signed.example/object"
-    monkeypatch.setattr("app.storage._client", lambda: mock_s3)
+    monkeypatch.setattr("app.storage._client", lambda *a, **k: mock_s3)
 
     monkeypatch.setattr("app.services.clip_service.render_clip", _FakeTask())
     monkeypatch.setattr("app.services.clip_service.export_clip", _FakeTask())
