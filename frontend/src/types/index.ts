@@ -319,6 +319,8 @@ export interface PublishJob {
   published_at: string | null;
   status: PublishJobStatus;
   external_post_id: string | null;
+  /** Public URL for a completed `link` job; null for other destinations. */
+  share_url: string | null;
   error_message: string | null;
   created_at: string;
   updated_at: string;

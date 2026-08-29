@@ -6,8 +6,9 @@ schema in this module.
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
+from app.config import settings
 from app.models.publishing import (
     PublishDestinationType,
     PublishJobStatus,
@@ -68,6 +69,17 @@ class PublishJobResponse(BaseModel):
     error_message: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def share_url(self) -> str | None:
+        """Public URL for a completed `link` job (external_post_id is the slug)."""
+        if (
+            self.destination_type == PublishDestinationType.link
+            and self.external_post_id
+        ):
+            return f"{settings.FRONTEND_URL}/s/{self.external_post_id}"
+        return None
 
 
 class PublishJobUpdate(BaseModel):

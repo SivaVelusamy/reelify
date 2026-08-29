@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarClock, Pencil, Trash2 } from 'lucide-react';
+import { CalendarClock, Check, Copy, ExternalLink, Pencil, Trash2 } from 'lucide-react';
 import { GlassCard } from '../ui/GlassCard';
 import { GradientButton } from '../ui/GradientButton';
 import { StatusBadge } from '../ui/StatusBadge';
@@ -19,9 +19,34 @@ interface PublishJobRowProps {
 
 const EDITABLE_STATUSES = new Set(['draft', 'scheduled']);
 
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through */
+  }
+  try {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(area);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 export function PublishJobRow({ job }: PublishJobRowProps) {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isCancelOpen, setIsCancelOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [scheduledAt, setScheduledAt] = useState<string | null>(
     job.scheduled_at,
   );
@@ -117,6 +142,37 @@ export function PublishJobRow({ job }: PublishJobRowProps) {
         <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
           {job.error_message}
         </p>
+      )}
+
+      {job.share_url && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
+          <input
+            readOnly
+            value={job.share_url}
+            aria-label="Public share link"
+            onFocus={(event) => event.currentTarget.select()}
+            className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              void copyText(job.share_url as string).then(setCopied);
+            }}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+          >
+            {copied ? <Check size={13} /> : <Copy size={13} />}
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+          <a
+            href={job.share_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+          >
+            <ExternalLink size={13} />
+            Open
+          </a>
+        </div>
       )}
 
       <Modal
