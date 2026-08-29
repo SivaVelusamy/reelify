@@ -69,11 +69,6 @@ def _get_owned_clip(db: Session, user: User, clip_id: int) -> Clip:
     return clip
 
 
-def _require_rendered(clip: Clip) -> None:
-    if not clip.render_storage_key:
-        raise ValidationError("Clip must be rendered before it can be published or shared")
-
-
 def _get_owned_job(db: Session, user: User, job_id: int) -> PublishJob:
     job = (
         db.query(PublishJob)
@@ -259,8 +254,9 @@ def disconnect(db: Session, user: User, account_id: int) -> None:
 def publish_or_schedule(
     db: Session, user: User, clip_id: int, req: PublishRequest
 ) -> PublishJob:
+    # The clip does not need to be rendered yet — run_publish_job renders it
+    # (or re-renders a stale placeholder) as the first step.
     clip = _get_owned_clip(db, user, clip_id)
-    _require_rendered(clip)
 
     dest = req.destination_type
     social_account_id: int | None = None
@@ -419,7 +415,6 @@ def create_share_link(
     db: Session, user: User, clip_id: int, expires_at: datetime | None = None
 ) -> ShareLinkResponse:
     clip = _get_owned_clip(db, user, clip_id)
-    _require_rendered(clip)
 
     link = ShareLink(
         clip_id=clip.id,
@@ -431,8 +426,22 @@ def create_share_link(
     db.add(link)
     db.commit()
     db.refresh(link)
+
+    # Ensure the clip has a rendered video so /s/<slug> works shortly.
+    if not clip.render_storage_key:
+        _enqueue_render(clip.id)
+
     logger.info("create_share_link: %s for clip %s", link.slug, clip.id)
     return _share_link_response(link)
+
+
+def _enqueue_render(clip_id: int) -> None:
+    try:
+        from app.workers.render import render_clip
+
+        render_clip.delay(clip_id)
+    except Exception as exc:  # pragma: no cover - broker/environment dependent
+        logger.warning("create_share_link: could not enqueue render %s: %s", clip_id, exc)
 
 
 def get_public_clip(db: Session, slug: str) -> PublicClipResponse:

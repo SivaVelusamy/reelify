@@ -85,14 +85,25 @@ def test_publish_scheduled_future(client, make_clip, user, auth_headers):
     assert resp.json()["status"] == "scheduled"
 
 
-def test_publish_requires_rendered_clip(client, make_clip, user, auth_headers):
+def test_publish_accepts_unrendered_clip(client, make_clip, user, auth_headers):
+    # An unrendered clip is fine — run_publish_job renders it as step one.
     clip = make_clip(user, status="draft", render_storage_key=None)
     resp = client.post(
         f"{BASE}/clips/{clip.id}/publish",
         json={"destination_type": "link"},
         headers=auth_headers,
     )
-    assert resp.status_code == 422
+    assert resp.status_code == 201
+    assert resp.json()["status"] in {"publishing", "scheduled"}
+
+
+def test_share_link_works_for_unrendered_clip(client, make_clip, user, auth_headers):
+    clip = make_clip(user, status="draft", render_storage_key=None)
+    resp = client.post(
+        f"{BASE}/clips/{clip.id}/share-link", json={}, headers=auth_headers
+    )
+    assert resp.status_code == 201
+    assert resp.json()["slug"]
 
 
 def test_update_and_delete_only_on_editable_jobs(client, db, make_clip, user, auth_headers):

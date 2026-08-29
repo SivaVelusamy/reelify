@@ -115,6 +115,10 @@ def _patch_externals(monkeypatch):
         "app.services.publishing_service.run_publish_job", _FakeTask()
     )
     monkeypatch.setattr(
+        "app.services.publishing_service._enqueue_render",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
         "app.services.project_service._enqueue_pipeline", lambda video_id: None
     )
     monkeypatch.setattr(

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Download } from 'lucide-react';
+import { Download, Send } from 'lucide-react';
 import { PageWrapper } from '../components/layout/PageWrapper';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GradientButton } from '../components/ui/GradientButton';
@@ -148,6 +148,19 @@ export default function LibraryClipPage() {
             >
               Download
             </GradientButton>
+            <Link
+              to={`/clips/${clipId}/publish`}
+              className="inline-flex items-center gap-2 rounded-full border border-brand-300 px-5 py-2.5 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+            >
+              <Send size={16} />
+              Publish
+            </Link>
+            <Link
+              to={`/clips/${clipId}/edit`}
+              className="inline-flex items-center rounded-full border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+            >
+              Edit
+            </Link>
             {bundleId && bundle && (
               <span className="flex items-center gap-2 text-sm">
                 <StatusBadge status={bundle.status} />

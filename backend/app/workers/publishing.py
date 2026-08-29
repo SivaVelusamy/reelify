@@ -30,6 +30,7 @@ from app.models.publishing import (
 )
 from app.services.publishing import SOCIAL_ADAPTERS, link, slack, teams
 from app.workers import celery
+from app.workers.render import _render_clip_to_storage, _render_is_real
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,17 @@ def run_publish_job(self, job_id: int) -> dict:
         clip = db.query(Clip).filter(Clip.id == job.clip_id).first()
         if clip is None:
             raise ValueError(f"Clip {job.clip_id} no longer exists")
+
+        # Every destination needs a real rendered video (share link, webhook
+        # preview, social upload). Build it now if it's missing or a placeholder.
+        if not _render_is_real(clip.render_storage_key):
+            logger.info("run_publish_job: rendering clip %s before publish", clip.id)
+            from app.models.clip import ClipStatus
+
+            clip.render_storage_key = _render_clip_to_storage(db, clip)
+            clip.status = ClipStatus.rendered
+            db.add(clip)
+            db.commit()
 
         adapter, target = _resolve_adapter_and_target(db, job, clip)
         external_post_id = adapter.publish(job, clip, target)

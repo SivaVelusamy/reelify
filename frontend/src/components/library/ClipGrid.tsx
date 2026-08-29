@@ -89,12 +89,20 @@ function LibraryClipCard({
         </div>
       )}
 
-      <Link
-        to={`/library/clips/${clip.id}`}
-        className="mt-1 inline-flex w-fit items-center rounded-full border border-brand-200 px-4 py-1.5 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-50"
-      >
-        Open
-      </Link>
+      <div className="mt-1 flex flex-wrap gap-2">
+        <Link
+          to={`/library/clips/${clip.id}`}
+          className="inline-flex w-fit items-center rounded-full border border-brand-200 px-4 py-1.5 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-50"
+        >
+          Open
+        </Link>
+        <Link
+          to={`/clips/${clip.id}/publish`}
+          className="inline-flex w-fit items-center rounded-full border border-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100"
+        >
+          Publish
+        </Link>
+      </div>
     </GlassCard>
   );
 }

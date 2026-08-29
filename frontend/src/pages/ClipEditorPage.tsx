@@ -153,6 +153,12 @@ export default function ClipEditorPage() {
           >
             Export
           </Link>
+          <Link
+            to={`/clips/${clipId}/publish`}
+            className="inline-flex items-center rounded-full border border-brand-300 px-6 py-3 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+          >
+            Publish
+          </Link>
         </div>
       </div>
 
