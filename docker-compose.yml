@@ -63,6 +63,7 @@ services:
 
   backend:
     build: ./backend
+    image: reelify-backend:latest
     restart: unless-stopped
     env_file:
       - .env
@@ -86,6 +87,7 @@ services:
 
   worker:
     build: ./backend
+    image: reelify-backend:latest
     restart: unless-stopped
     env_file:
       - .env
@@ -100,6 +102,7 @@ services:
 
   beat:
     build: ./backend
+    image: reelify-backend:latest
     restart: unless-stopped
     env_file:
       - .env

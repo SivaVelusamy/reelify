@@ -29,6 +29,11 @@ class Settings(BaseSettings):
 
     # Object storage (S3-compatible)
     STORAGE_ENDPOINT: str = "http://localhost:9000"
+    # Endpoint the *browser* must use to fetch presigned URLs. In Docker the
+    # backend talks to "http://storage:9000" internally, but a download link
+    # handed to the browser has to resolve from the host. Leave empty to reuse
+    # STORAGE_ENDPOINT (correct for real S3 or a non-Docker MinIO).
+    STORAGE_PUBLIC_ENDPOINT: str = ""
     STORAGE_BUCKET: str = "reelify-media"
     STORAGE_ACCESS_KEY: str = "minioadmin"
     STORAGE_SECRET_KEY: str = "minioadmin"
