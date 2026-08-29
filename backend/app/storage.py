@@ -73,14 +73,19 @@ def upload_file(key: str, path: str, content_type: str = "application/octet-stre
         return upload_fileobj(key, fh, content_type)
 
 
-def object_exists(key: str) -> bool:
+def object_size(key: str) -> int | None:
+    """Return an object's size in bytes, or None if it does not exist."""
     from botocore.exceptions import ClientError
 
     try:
-        _client().head_object(Bucket=settings.STORAGE_BUCKET, Key=key)
-        return True
+        head = _client().head_object(Bucket=settings.STORAGE_BUCKET, Key=key)
+        return int(head["ContentLength"])
     except ClientError:
-        return False
+        return None
+
+
+def object_exists(key: str) -> bool:
+    return object_size(key) is not None
 
 
 def delete_object(key: str) -> None:

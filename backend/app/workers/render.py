@@ -13,12 +13,19 @@ from app.database import SessionLocal
 from app.media import ffmpeg as media
 from app.media.ffmpeg import CaptionStyle, RenderRequest, ffmpeg_available
 from app.models.clip import Caption, Clip, ClipExport, ClipExportStatus, ClipStatus
-from app.storage import download_to_path, upload_file, upload_fileobj
+from app.storage import (
+    download_to_path,
+    object_size,
+    upload_file,
+    upload_fileobj,
+)
 from app.workers import celery
 
 logger = logging.getLogger(__name__)
 
 _PLACEHOLDER = b"\x00" * 32
+# A render at or below this size is a placeholder, not a real video.
+_PLACEHOLDER_MAX_BYTES = 1024
 
 
 def _enum_value(value) -> str:
@@ -54,6 +61,48 @@ def _upload_placeholder(key: str, content_type: str) -> None:
         upload_fileobj(key, fh, content_type=content_type)
 
 
+def _render_clip_to_storage(db, clip: Clip) -> str:
+    """Run the ffmpeg render for ``clip`` and upload it. Returns the storage key."""
+    caption = db.query(Caption).filter(Caption.clip_id == clip.id).first()
+    source_key = getattr(clip.source_video, "storage_key", None)
+    render_key = f"renders/{clip.user_id}/{clip.id}.mp4"
+
+    if not ffmpeg_available() or not source_key:
+        reason = "no source video" if not source_key else "ffmpeg unavailable"
+        logger.info("render: %s — placeholder render for clip %s", reason, clip.id)
+        _upload_placeholder(render_key, "video/mp4")
+        return render_key
+
+    with tempfile.TemporaryDirectory() as tmp:
+        src = os.path.join(tmp, "source")
+        out = os.path.join(tmp, "clip.mp4")
+        srt = os.path.join(tmp, "captions.srt")
+        download_to_path(source_key, src)
+        media.render_clip(
+            RenderRequest(
+                source_path=src,
+                output_path=out,
+                start_seconds=float(clip.start_seconds),
+                end_seconds=float(clip.end_seconds),
+                aspect_ratio=_enum_value(clip.aspect_ratio),
+                reframe_mode=_enum_value(clip.reframe_mode),
+                crop_config=clip.crop_config,
+                caption_segments=(caption.segments or []) if caption else [],
+                caption_style=_caption_style(caption),
+                subtitle_path=srt,
+            )
+        )
+        upload_file(render_key, out, content_type="video/mp4")
+    return render_key
+
+
+def _render_is_real(key: str | None) -> bool:
+    if not key:
+        return False
+    size = object_size(key)
+    return size is not None and size > _PLACEHOLDER_MAX_BYTES
+
+
 @celery.task(name="app.workers.render.render_clip", bind=True)
 def render_clip(self, clip_id: int) -> dict:
     """Trim → reframe → burn captions → upload; then mark the clip ``rendered``."""
@@ -64,39 +113,7 @@ def render_clip(self, clip_id: int) -> dict:
             logger.warning("render_clip: clip %s not found", clip_id)
             return {"clip_id": clip_id, "status": "not_found"}
 
-        caption = db.query(Caption).filter(Caption.clip_id == clip_id).first()
-        source_key = getattr(clip.source_video, "storage_key", None)
-        render_key = f"renders/{clip.user_id}/{clip.id}.mp4"
-        aspect = _enum_value(clip.aspect_ratio)
-
-        if not ffmpeg_available() or not source_key:
-            reason = "no source video" if not source_key else "ffmpeg unavailable"
-            logger.info(
-                "render_clip: %s — placeholder render for clip %s", reason, clip_id
-            )
-            _upload_placeholder(render_key, "video/mp4")
-        else:
-            with tempfile.TemporaryDirectory() as tmp:
-                src = os.path.join(tmp, "source")
-                out = os.path.join(tmp, "clip.mp4")
-                srt = os.path.join(tmp, "captions.srt")
-                download_to_path(source_key, src)
-                media.render_clip(
-                    RenderRequest(
-                        source_path=src,
-                        output_path=out,
-                        start_seconds=float(clip.start_seconds),
-                        end_seconds=float(clip.end_seconds),
-                        aspect_ratio=aspect,
-                        reframe_mode=_enum_value(clip.reframe_mode),
-                        crop_config=clip.crop_config,
-                        caption_segments=(caption.segments or []) if caption else [],
-                        caption_style=_caption_style(caption),
-                        subtitle_path=srt,
-                    )
-                )
-                upload_file(render_key, out, content_type="video/mp4")
-
+        render_key = _render_clip_to_storage(db, clip)
         clip.render_storage_key = render_key
         clip.status = ClipStatus.rendered
         db.add(clip)
@@ -122,8 +139,8 @@ def export_clip(self, export_id: int) -> dict:
             return {"export_id": export_id, "status": "not_found"}
 
         clip = db.query(Clip).filter(Clip.id == export.clip_id).first()
-        if clip is None or not clip.render_storage_key:
-            logger.error("export_clip: export %s has no rendered clip", export_id)
+        if clip is None:
+            logger.error("export_clip: export %s has no clip", export_id)
             export.status = ClipExportStatus.failed
             db.add(export)
             db.commit()
@@ -136,6 +153,18 @@ def export_clip(self, export_id: int) -> dict:
         fmt = export.format or "mp4"
         resolution = export.resolution or "1080x1920"
         export_key = f"exports/{clip.user_id}/{export_id}.{fmt}"
+
+        # Re-render if the stored render is missing or a stale placeholder
+        # (e.g. produced before real ffmpeg rendering shipped).
+        if not _render_is_real(clip.render_storage_key):
+            logger.info(
+                "export_clip: render for clip %s is missing/placeholder; re-rendering",
+                clip.id,
+            )
+            clip.render_storage_key = _render_clip_to_storage(db, clip)
+            clip.status = ClipStatus.rendered
+            db.add(clip)
+            db.commit()
 
         if not ffmpeg_available():
             logger.info("export_clip: ffmpeg missing — placeholder export %s", export_id)

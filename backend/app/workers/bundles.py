@@ -11,10 +11,11 @@ import os
 import zipfile
 
 from app.database import SessionLocal
-from app.models.clip import Clip
+from app.models.clip import Clip, ClipStatus
 from app.models.library import DownloadBundle, DownloadBundleStatus
-from app.storage import download_bytes, object_exists, upload_fileobj
+from app.storage import download_bytes, upload_fileobj
 from app.workers import celery
+from app.workers.render import _render_clip_to_storage, _render_is_real
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,17 @@ def build_bundle(self, bundle_id: int) -> dict:
                     manifest.append(f"- clip {cid}: not found / not owned")
                     continue
                 key = clip.render_storage_key
-                if not key or not object_exists(key):
+                if not _render_is_real(key):
+                    # Missing or stale placeholder render — build it now.
+                    try:
+                        key = _render_clip_to_storage(db, clip)
+                        clip.render_storage_key = key
+                        clip.status = ClipStatus.rendered
+                        db.add(clip)
+                        db.commit()
+                    except Exception:  # noqa: BLE001
+                        logger.exception("build_bundle: render failed for clip %s", cid)
+                if not _render_is_real(key):
                     manifest.append(f"- {clip.title or f'clip {cid}'}: no rendered file yet")
                     continue
                 ext = os.path.splitext(key)[1] or ".mp4"

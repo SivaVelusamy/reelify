@@ -44,8 +44,15 @@ def _run(cmd: list[str]) -> None:
     logger.info("ffmpeg: %s", " ".join(cmd))
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
-        tail = (proc.stderr or "")[-2000:]
-        raise FFmpegError(f"{cmd[0]} exited {proc.returncode}: {tail}")
+        stderr = proc.stderr or ""
+        # Prefer the error-looking lines over the (very long) build-config banner.
+        hits = [
+            ln for ln in stderr.splitlines()
+            if any(k in ln.lower() for k in ("error", "invalid", "no such", "unable", "failed"))
+        ]
+        detail = " | ".join(hits[-5:]) if hits else stderr[-1500:]
+        logger.error("ffmpeg failed (%s): %s", proc.returncode, stderr[-3000:])
+        raise FFmpegError(f"{cmd[0]} exited {proc.returncode}: {detail}")
 
 
 def probe_duration(path: str) -> float | None:
