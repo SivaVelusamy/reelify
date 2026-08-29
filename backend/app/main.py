@@ -11,6 +11,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.config import settings
 from app.exceptions import AppException
+from app.public_url import base_url_from_request, set_request_base_url
 from app.rate_limit import limiter
 
 logging.basicConfig(level=logging.INFO)
@@ -31,6 +32,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def _capture_public_base_url(request: Request, call_next):
+    """Remember this request's public origin so services can build absolute
+    links (share links, redirects) that match how the user reached us."""
+    set_request_base_url(base_url_from_request(request))
+    try:
+        return await call_next(request)
+    finally:
+        set_request_base_url(None)
 
 
 @app.exception_handler(AppException)

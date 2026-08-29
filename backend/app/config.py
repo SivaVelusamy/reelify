@@ -94,6 +94,13 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = ""
 
     # Frontend / CORS
+    # Canonical public origin of the deployed app, e.g. https://reelify.example.com.
+    # Set this on a real deployment — share links, OAuth redirects and Stripe
+    # return URLs are built from it. Empty -> derive from the request (behind a
+    # trusted proxy) or fall back to FRONTEND_URL.
+    PUBLIC_BASE_URL: str = ""
+    # Trust X-Forwarded-Proto / X-Forwarded-Host from the reverse proxy.
+    TRUST_PROXY_HEADERS: bool = True
     FRONTEND_URL: str = "http://localhost:3000"
     VITE_API_URL: str = "http://localhost:8000"
     ALLOWED_ORIGINS: list[str] = [

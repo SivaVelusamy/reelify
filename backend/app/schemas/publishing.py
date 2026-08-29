@@ -8,13 +8,13 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
-from app.config import settings
 from app.models.publishing import (
     PublishDestinationType,
     PublishJobStatus,
     SocialAccountStatus,
     SocialPlatform,
 )
+from app.public_url import public_base_url
 
 
 class SocialAccountResponse(BaseModel):
@@ -78,7 +78,7 @@ class PublishJobResponse(BaseModel):
             self.destination_type == PublishDestinationType.link
             and self.external_post_id
         ):
-            return f"{settings.FRONTEND_URL}/s/{self.external_post_id}"
+            return f"{public_base_url()}/s/{self.external_post_id}"
         return None
 
 

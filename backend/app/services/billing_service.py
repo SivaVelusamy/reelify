@@ -40,6 +40,7 @@ from app.models.billing import (
 from app.models.clip import Clip
 from app.models.project import SourceVideo, SourceVideoStatus
 from app.models.user import User, UserPlan
+from app.public_url import public_base_url
 from app.schemas.billing import (
     BillingOverview,
     SubscriptionResponse,
@@ -263,7 +264,7 @@ def create_checkout_session(db: Session, user: User, plan: str) -> str:
             plan,
         )
         return (
-            f"{settings.FRONTEND_URL}/billing?checkout=success&simulated=1"
+            f"{public_base_url()}/billing?checkout=success&simulated=1"
         )
 
     price_id = PLAN_PRICE_ENV[plan]
@@ -278,8 +279,8 @@ def create_checkout_session(db: Session, user: User, plan: str) -> str:
         mode="subscription",
         customer=sub.stripe_customer_id,
         line_items=[{"price": price_id, "quantity": 1}],
-        success_url=f"{settings.FRONTEND_URL}/billing?checkout=success",
-        cancel_url=f"{settings.FRONTEND_URL}/billing?checkout=cancelled",
+        success_url=f"{public_base_url()}/billing?checkout=success",
+        cancel_url=f"{public_base_url()}/billing?checkout=cancelled",
         metadata={"user_id": str(user.id), "plan": plan},
         subscription_data={
             "metadata": {"user_id": str(user.id), "plan": plan}
@@ -291,7 +292,7 @@ def create_checkout_session(db: Session, user: User, plan: str) -> str:
 def create_portal_session(db: Session, user: User) -> str:
     if not _stripe_enabled():
         # SHORT-CIRCUIT — no Stripe key configured (template default).
-        return f"{settings.FRONTEND_URL}/billing?portal=simulated"
+        return f"{public_base_url()}/billing?portal=simulated"
 
     sub = _get_subscription(db, user.id)
     if sub is None or not sub.stripe_customer_id:
@@ -301,7 +302,7 @@ def create_portal_session(db: Session, user: User) -> str:
     stripe.api_key = settings.STRIPE_SECRET_KEY
     session = stripe.billing_portal.Session.create(
         customer=sub.stripe_customer_id,
-        return_url=f"{settings.FRONTEND_URL}/billing",
+        return_url=f"{public_base_url()}/billing",
     )
     return session["url"]
 

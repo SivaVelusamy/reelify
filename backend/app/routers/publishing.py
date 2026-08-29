@@ -13,11 +13,11 @@ from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_active_user
 from app.models.publishing import PublishJobStatus
 from app.models.user import User
+from app.public_url import public_base_url
 from app.schemas.publishing import (
     CalendarEntry,
     ConnectStartResponse,
@@ -72,12 +72,12 @@ def social_account_callback(
     except Exception as exc:  # noqa: BLE001 - always return the user to the UI
         logger.warning("social callback failed for %s: %s", platform, exc)
         return RedirectResponse(
-            url=f"{settings.FRONTEND_URL}/settings/connections?connect_error={platform}",
+            url=f"{public_base_url()}/settings/connections?connect_error={platform}",
             status_code=status.HTTP_302_FOUND,
         )
     sim = "" if publishing_service.social_platform_configured(platform) else "&simulated=1"
     return RedirectResponse(
-        url=f"{settings.FRONTEND_URL}/settings/connections?connected={platform}{sim}",
+        url=f"{public_base_url()}/settings/connections?connected={platform}{sim}",
         status_code=status.HTTP_302_FOUND,
     )
 

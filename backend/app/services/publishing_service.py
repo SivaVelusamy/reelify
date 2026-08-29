@@ -27,6 +27,7 @@ from app.models.publishing import (
     SocialPlatform,
 )
 from app.models.user import User
+from app.public_url import public_base_url
 from app.schemas.publishing import (
     CalendarEntry,
     ConnectStartResponse,
@@ -101,7 +102,7 @@ def _new_unique_slug(db: Session) -> str:
 
 def _share_link_response(link: ShareLink) -> ShareLinkResponse:
     return ShareLinkResponse(
-        url=f"{settings.FRONTEND_URL}/s/{link.slug}",
+        url=f"{public_base_url()}/s/{link.slug}",
         slug=link.slug,
         is_active=link.is_active,
         expires_at=link.expires_at,
