@@ -95,6 +95,9 @@ services:
     volumes:
       # Persist downloaded Whisper models across restarts.
       - whispercache:/home/appuser/.cache
+      # Drop a Netscape cookies.txt in ./secrets and set
+      # YT_DLP_COOKIES_FILE=/secrets/cookies.txt in .env for YouTube auth.
+      - ./secrets:/secrets:ro
     depends_on:
       db:
         condition: service_healthy

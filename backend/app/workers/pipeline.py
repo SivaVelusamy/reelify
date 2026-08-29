@@ -21,6 +21,7 @@ import subprocess
 import tempfile
 from collections.abc import Callable
 
+from app.config import settings
 from app.database import SessionLocal
 from app.models.clip import Clip, ClipStatus
 from app.models.project import (
@@ -100,8 +101,6 @@ def _probe_duration(source: str) -> float | None:
         return None
 
 
-#: Cap the download so a huge 4K upload can't blow past MAX_SOURCE_BYTES.
-_YT_MAX_HEIGHT = 1080
 _YT_MAX_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB, matches the file-upload limit
 
 
@@ -109,12 +108,10 @@ def _download_youtube(url: str, dest_dir: str) -> tuple[str, dict]:
     from yt_dlp import YoutubeDL
     from yt_dlp.utils import DownloadError
 
+    max_h = settings.YT_DLP_MAX_HEIGHT
     opts = {
-        # Best <=1080p video + best audio, falling back to a single progressive stream.
-        "format": (
-            f"bv*[height<={_YT_MAX_HEIGHT}]+ba/"
-            f"b[height<={_YT_MAX_HEIGHT}]/bv*+ba/b"
-        ),
+        # Best <=max_h video + best audio, falling back to a single progressive stream.
+        "format": f"bv*[height<={max_h}]+ba/b[height<={max_h}]/bv*+ba/b",
         "outtmpl": os.path.join(dest_dir, "%(id)s.%(ext)s"),
         "merge_output_format": "mp4",
         "noplaylist": True,
@@ -124,12 +121,19 @@ def _download_youtube(url: str, dest_dir: str) -> tuple[str, dict]:
         "socket_timeout": 30,
         "max_filesize": _YT_MAX_BYTES,
     }
-    # yt-dlp's newest signature-challenge solver ("EJS remote components") is
-    # opt-in because it downloads code at runtime. Enable it only when the
-    # operator sets YT_DLP_REMOTE_COMPONENTS (e.g. "ejs:github").
-    remote = os.getenv("YT_DLP_REMOTE_COMPONENTS", "").strip()
+
+    cookies = settings.YT_DLP_COOKIES_FILE.strip()
+    if cookies:
+        if os.path.isfile(cookies):
+            opts["cookiefile"] = cookies
+            logger.info("yt-dlp: using cookies file %s", cookies)
+        else:
+            logger.warning("yt-dlp: YT_DLP_COOKIES_FILE=%s not found; continuing without", cookies)
+
+    remote = settings.YT_DLP_REMOTE_COMPONENTS.strip()
     if remote:
         opts["remote_components"] = [remote]
+
     try:
         with YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)

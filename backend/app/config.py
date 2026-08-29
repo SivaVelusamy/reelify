@@ -54,6 +54,15 @@ class Settings(BaseSettings):
     WHISPER_DEVICE: str = "cpu"
     WHISPER_COMPUTE_TYPE: str = "int8"
 
+    # YouTube ingest (yt-dlp)
+    # Netscape-format cookies.txt exported from a logged-in browser session.
+    # Lets yt-dlp fetch age-restricted / bot-flagged videos. Empty = no cookies.
+    YT_DLP_COOKIES_FILE: str = ""
+    YT_DLP_MAX_HEIGHT: int = 1080
+    # yt-dlp's JS-challenge solver — fetches code at runtime, so opt-in
+    # (e.g. "ejs:github").
+    YT_DLP_REMOTE_COMPONENTS: str = ""
+
     # Stripe
     STRIPE_SECRET_KEY: str = "sk_test_placeholder"
     STRIPE_WEBHOOK_SECRET: str = "whsec_placeholder"
