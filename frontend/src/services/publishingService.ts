@@ -20,7 +20,7 @@ import type {
 } from '../types/publishing';
 import type { SocialAccount } from '../types';
 
-const PUBLIC_API_ROOT = `${import.meta.env.VITE_API_URL}/api/v1`;
+const PUBLIC_API_ROOT = `${import.meta.env.VITE_API_URL ?? ''}/api/v1`;
 
 /* -------------------------------------------------------------------------- */
 /* Social accounts                                                             */

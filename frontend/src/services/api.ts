@@ -4,7 +4,11 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from 'axios';
 
-const API_ROOT = `${import.meta.env.VITE_API_URL}/api/v1`;
+// Relative by default: nginx (prod) and the Vite dev server both proxy `/api`
+// to the backend, so this works regardless of which host port the API is on.
+// Set VITE_API_URL only to point at a backend on a different origin.
+const API_ORIGIN = import.meta.env.VITE_API_URL ?? '';
+const API_ROOT = `${API_ORIGIN}/api/v1`;
 
 interface RetriableRequestConfig extends InternalAxiosRequestConfig {
   _retry?: boolean;
