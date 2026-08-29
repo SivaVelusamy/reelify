@@ -17,6 +17,7 @@ email if an ``app.services.email_service`` module exists.
 import functools
 import logging
 import os
+import shutil
 import subprocess
 import tempfile
 from collections.abc import Callable
@@ -125,7 +126,11 @@ def _download_youtube(url: str, dest_dir: str) -> tuple[str, dict]:
     cookies = settings.YT_DLP_COOKIES_FILE.strip()
     if cookies:
         if os.path.isfile(cookies):
-            opts["cookiefile"] = cookies
+            # yt-dlp rewrites the cookie jar after the session, so work on a
+            # writable copy — the mounted file is typically read-only.
+            work_cookies = os.path.join(dest_dir, "cookies.txt")
+            shutil.copyfile(cookies, work_cookies)
+            opts["cookiefile"] = work_cookies
             logger.info("yt-dlp: using cookies file %s", cookies)
         else:
             logger.warning("yt-dlp: YT_DLP_COOKIES_FILE=%s not found; continuing without", cookies)

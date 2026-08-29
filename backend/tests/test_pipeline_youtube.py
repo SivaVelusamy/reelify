@@ -44,11 +44,18 @@ def test_no_cookies_by_default(tmp_path, monkeypatch):
 
 
 def test_cookies_file_passed_when_present(tmp_path, monkeypatch):
-    cookies = tmp_path / "cookies.txt"
+    src = tmp_path / "src"
+    src.mkdir()
+    cookies = src / "cookies.txt"
     cookies.write_text("# Netscape HTTP Cookie File\n")
+    dest = tmp_path / "dl"
+    dest.mkdir()
     monkeypatch.setattr(pipeline.settings, "YT_DLP_COOKIES_FILE", str(cookies))
-    pipeline._download_youtube("https://youtu.be/x", str(tmp_path))
-    assert _FakeYDL.last_opts["cookiefile"] == str(cookies)
+    pipeline._download_youtube("https://youtu.be/x", str(dest))
+    # yt-dlp gets a writable *copy* inside the download dir, not the mounted file.
+    used = _FakeYDL.last_opts["cookiefile"]
+    assert used == str(dest / "cookies.txt")
+    assert (dest / "cookies.txt").read_text() == "# Netscape HTTP Cookie File\n"
 
 
 def test_missing_cookies_file_is_skipped(tmp_path, monkeypatch):
