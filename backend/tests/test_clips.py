@@ -89,7 +89,7 @@ def test_clip_preview_url(client, make_clip, user, auth_headers):
     clip = make_clip(user, status="rendered")
     resp = client.get(f"{BASE}/clips/{clip.id}/preview", headers=auth_headers)
     assert resp.status_code == 200
-    assert resp.json()["preview_url"].startswith("https://")
+    assert "/api/v1/media/" in resp.json()["preview_url"]
 
 
 def test_clip_ownership_404(client, make_clip, user, other_headers):
@@ -126,7 +126,7 @@ def test_get_export_with_download_url(client, db, make_clip, user, auth_headers)
 
     resp = client.get(f"{BASE}/exports/{export.id}", headers=auth_headers)
     assert resp.status_code == 200
-    assert resp.json()["download_url"].startswith("https://")
+    assert "/api/v1/media/" in resp.json()["download_url"]
     # ownership
     assert client.get(f"{BASE}/exports/{export.id}", headers=_other(client)).status_code in (401, 404)
 

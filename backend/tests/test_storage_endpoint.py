@@ -38,6 +38,7 @@ def test_auto_is_noop_for_localhost(monkeypatch):
 
 
 def test_presigned_url_uses_resolved_public_endpoint(monkeypatch):
+    monkeypatch.setattr(storage.settings, "MEDIA_DELIVERY", "presigned")
     monkeypatch.setattr(storage.settings, "STORAGE_PUBLIC_ENDPOINT", "auto")
     monkeypatch.setattr(public_url.settings, "PUBLIC_BASE_URL", "https://reelify.aisiva.tech")
 

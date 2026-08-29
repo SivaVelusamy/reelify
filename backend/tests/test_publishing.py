@@ -83,7 +83,7 @@ def test_share_link_view_count_and_expiry(client, db, make_clip, user, auth_head
 
     first = client.get(f"{BASE}/s/{slug}")
     assert first.status_code == 200
-    assert first.json()["video_url"].startswith("https://")
+    assert "/api/v1/media/" in first.json()["video_url"]
 
     client.get(f"{BASE}/s/{slug}")
     link = db.query(ShareLink).filter(ShareLink.slug == slug).one()

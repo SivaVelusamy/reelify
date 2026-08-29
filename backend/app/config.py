@@ -29,15 +29,15 @@ class Settings(BaseSettings):
 
     # Object storage (S3-compatible)
     STORAGE_ENDPOINT: str = "http://localhost:9000"
-    # Endpoint the *browser* must use to fetch presigned URLs. The backend talks
-    # to STORAGE_ENDPOINT internally, but a download link handed to the browser
-    # has to resolve publicly. Options:
-    #   ""      -> reuse STORAGE_ENDPOINT (fine for real AWS S3)
-    #   "auto"  -> https://s3.<public-host>  (derived from PUBLIC_BASE_URL)
-    #   a URL   -> e.g. https://s3.reelify.example.com
-    # When you use a subdomain, your reverse proxy for it must forward to the
-    # storage service AND preserve the Host header (the presigned signature
-    # covers it). Path-style addressing is always used.
+
+    # How media (clip renders, exports, share videos) is delivered to browsers:
+    #   "proxy"     -> stream through the backend at <PUBLIC_BASE_URL>/api/v1/media/...
+    #                  (default — always same-origin, no extra DNS/proxy setup)
+    #   "presigned" -> hand out S3 presigned URLs (needs STORAGE_PUBLIC_ENDPOINT
+    #                  to be browser-reachable, e.g. real AWS S3 or an s3 subdomain)
+    MEDIA_DELIVERY: str = "proxy"
+    # Only used when MEDIA_DELIVERY="presigned". "" reuses STORAGE_ENDPOINT;
+    # "auto" -> https://s3.<PUBLIC_BASE_URL host>; or an explicit URL.
     STORAGE_PUBLIC_ENDPOINT: str = ""
     STORAGE_BUCKET: str = "reelify-media"
     STORAGE_ACCESS_KEY: str = "minioadmin"

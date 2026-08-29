@@ -70,6 +70,7 @@ from app.routers import (  # noqa: F401
     clips,  # Module 3: Clips
     dashboard,  # Module 6: Dashboard
     library,  # Module 4: Library / Assets
+    media,  # same-origin media delivery
     projects,  # Module 2: Projects / Uploads
     publishing,  # Module 8: Publishing / Distribution
 )
@@ -84,5 +85,6 @@ for _router in (
     billing.router,
     publishing.router,
     admin.router,
+    media.router,
 ):
     app.include_router(_router, prefix="/api/v1")

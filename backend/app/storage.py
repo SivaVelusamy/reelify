@@ -58,18 +58,37 @@ def upload_fileobj(
 
 
 def generate_presigned_url(key: str, ttl: int | None = None) -> str:
-    """Return a time-limited signed GET URL the browser can fetch directly.
+    """A browser-fetchable URL for a storage object.
 
-    Signed against the resolved public endpoint (see ``_public_endpoint``),
-    otherwise the internal ``STORAGE_ENDPOINT``.
+    ``MEDIA_DELIVERY="proxy"`` (default) -> a same-origin backend URL that
+    streams the object. ``"presigned"`` -> an S3 presigned URL signed against
+    the resolved public endpoint.
     """
     expires = ttl if ttl is not None else settings.SIGNED_URL_TTL_SECONDS
+
+    if settings.MEDIA_DELIVERY != "presigned":
+        from app.media_proxy import sign_media_key
+        from app.public_url import public_base_url
+
+        return f"{public_base_url()}/api/v1/media/{sign_media_key(key, expires)}"
+
     client = _client(_public_endpoint())
     return client.generate_presigned_url(
         "get_object",
         Params={"Bucket": settings.STORAGE_BUCKET, "Key": key},
         ExpiresIn=expires,
     )
+
+
+def stream_object(key: str, *, range_header: str | None = None):
+    """Return a boto3 ``get_object`` response (Body is a streaming file object).
+
+    Passes an HTTP Range through when given, so <video> seeking works.
+    """
+    kwargs = {"Bucket": settings.STORAGE_BUCKET, "Key": key}
+    if range_header:
+        kwargs["Range"] = range_header
+    return _client().get_object(**kwargs)
 
 
 def download_bytes(key: str) -> bytes:
