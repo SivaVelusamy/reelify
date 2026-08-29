@@ -61,6 +61,30 @@ services:
       "
     restart: "no"
 
+  # Generates the YouTube session (poToken + visitor data) cobalt needs to
+  # actually proxy YouTube streams when self-hosted.
+  yt-session:
+    image: ghcr.io/imputnet/yt-session-generator:webserver
+    restart: unless-stopped
+
+  # Self-hosted cobalt (https://cobalt.tools) — primary media downloader.
+  # The worker reaches it at http://cobalt:9000; yt-dlp stays as the fallback.
+  cobalt:
+    image: ghcr.io/imputnet/cobalt:11
+    restart: unless-stopped
+    depends_on:
+      - yt-session
+    environment:
+      API_URL: "http://cobalt:9000/"
+      YOUTUBE_SESSION_SERVER: "http://yt-session:8080"
+      # A cobalt-format cookies.json can be mounted and referenced here later:
+      # COOKIE_PATH: "/cookies.json"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   backend:
     build: ./backend
     image: reelify-backend:latest
@@ -105,6 +129,8 @@ services:
         condition: service_healthy
       storage:
         condition: service_healthy
+      cobalt:
+        condition: service_started
 
   beat:
     build: ./backend

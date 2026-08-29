@@ -8,6 +8,10 @@ Each stage runs inside :func:`_pipeline_stage`, which opens a DB session, and on
 any exception sets ``SourceVideo.status = failed`` + ``error_message`` and
 re-raises. The next stage is only enqueued when the current one succeeds.
 
+``ingest`` downloads YouTube sources via a self-hosted **cobalt** API when
+``COBALT_API_URL`` is set, falling back to **yt-dlp** on any failure (yt-dlp is
+also the only path when cobalt is not configured).
+
 ``transcribe`` runs real speech-to-text via :mod:`app.media.transcription`
 (local faster-whisper by default, OpenAI when a key is set, stub as a last
 resort). ``analyze`` still uses a heuristic ranker, and ``finalize`` only sends
@@ -103,6 +107,87 @@ def _probe_duration(source: str) -> float | None:
 
 
 _YT_MAX_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB, matches the file-upload limit
+_DOWNLOAD_CHUNK = 1024 * 1024
+
+
+def _stream_to_file(url: str, dest_path: str, *, headers: dict | None = None) -> None:
+    """Download ``url`` to ``dest_path``, aborting if it exceeds the size cap."""
+    import httpx
+
+    written = 0
+    with httpx.stream("GET", url, headers=headers, follow_redirects=True, timeout=120) as resp:
+        resp.raise_for_status()
+        with open(dest_path, "wb") as fh:
+            for chunk in resp.iter_bytes(_DOWNLOAD_CHUNK):
+                written += len(chunk)
+                if written > _YT_MAX_BYTES:
+                    raise RuntimeError("Video exceeds the 2 GB limit")
+                fh.write(chunk)
+    if written == 0:
+        raise RuntimeError("Downloaded an empty file")
+
+
+def _download_via_cobalt(url: str, dest_dir: str) -> tuple[str, dict]:
+    """Resolve a media URL through a self-hosted cobalt API, then download it."""
+    import httpx
+
+    api = settings.COBALT_API_URL.rstrip("/")
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    if settings.COBALT_API_KEY:
+        headers["Authorization"] = f"Api-Key {settings.COBALT_API_KEY}"
+
+    payload = {
+        "url": url,
+        "videoQuality": str(settings.COBALT_VIDEO_QUALITY),
+        "downloadMode": "auto",
+        "filenameStyle": "basic",
+        "youtubeVideoCodec": "h264",
+    }
+    resp = httpx.post(f"{api}/", json=payload, headers=headers, timeout=60)
+    resp.raise_for_status()
+    body = resp.json()
+    status_ = body.get("status")
+
+    if status_ in ("tunnel", "redirect"):
+        media_url = body["url"]
+        filename = body.get("filename") or "video.mp4"
+    elif status_ == "picker":
+        items = body.get("picker") or []
+        videos = [i for i in items if i.get("type") in (None, "video")]
+        if not videos:
+            raise RuntimeError("cobalt picker returned no video item")
+        media_url = videos[0]["url"]
+        filename = "video.mp4"
+    elif status_ == "error":
+        code = (body.get("error") or {}).get("code", "unknown")
+        raise RuntimeError(f"cobalt error: {code}")
+    else:
+        # e.g. "local-processing" (needs client-side muxing) — let yt-dlp handle it.
+        raise RuntimeError(f"cobalt returned unsupported status {status_!r}")
+
+    ext = os.path.splitext(filename)[1].lstrip(".").lower() or "mp4"
+    dest = os.path.join(dest_dir, f"video.{ext}")
+    _stream_to_file(media_url, dest, headers={"Accept": "*/*"})
+
+    title = os.path.splitext(os.path.basename(filename))[0] or "YouTube video"
+    return dest, {
+        "id": url.rsplit("/", 1)[-1].split("?")[0][:32] or "cobalt",
+        "title": title,
+        "duration": _probe_duration(dest),
+        "language": "en",
+    }
+
+
+def _download_remote_video(url: str, dest_dir: str) -> tuple[str, dict]:
+    """cobalt first (when configured), yt-dlp as the fallback."""
+    if settings.COBALT_API_URL.strip():
+        try:
+            path, info = _download_via_cobalt(url, dest_dir)
+            logger.info("ingest: cobalt downloaded %s", url)
+            return path, info
+        except Exception as exc:  # noqa: BLE001 - fall back to yt-dlp
+            logger.warning("cobalt download failed (%s); falling back to yt-dlp", exc)
+    return _download_youtube(url, dest_dir)
 
 
 def _download_youtube(url: str, dest_dir: str) -> tuple[str, dict]:
@@ -171,7 +256,7 @@ def ingest_source_video(db, video_id: int) -> int:
 
     if video.source_type == SourceType.youtube_url:
         with tempfile.TemporaryDirectory(prefix="reelify-ingest-") as tmp:
-            path, info = _download_youtube(video.original_url, tmp)
+            path, info = _download_remote_video(video.original_url, tmp)
             ext = os.path.splitext(path)[1].lstrip(".").lower() or "mp4"
             content_type = {"webm": "video/webm", "mkv": "video/x-matroska"}.get(
                 ext, "video/mp4"

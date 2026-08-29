@@ -70,3 +70,81 @@ def test_max_height_flows_into_format(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline.settings, "YT_DLP_MAX_HEIGHT", 720)
     pipeline._download_youtube("https://youtu.be/x", str(tmp_path))
     assert "height<=720" in _FakeYDL.last_opts["format"]
+
+
+# --------------------------------------------------------------------------- #
+# cobalt downloader
+# --------------------------------------------------------------------------- #
+class _FakeResp:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self._payload
+
+
+@pytest.fixture
+def _fake_stream(monkeypatch):
+    """Stub _stream_to_file to just write a small file; record the URL used."""
+    calls = {}
+
+    def fake(url, dest_path, headers=None):
+        calls["url"] = url
+        with open(dest_path, "wb") as fh:
+            fh.write(b"\x00" * 128)
+
+    monkeypatch.setattr(pipeline, "_stream_to_file", fake)
+    monkeypatch.setattr(pipeline, "_probe_duration", lambda p: 42.0)
+    return calls
+
+
+def test_cobalt_tunnel_download(tmp_path, monkeypatch, _fake_stream):
+    monkeypatch.setattr(pipeline.settings, "COBALT_API_URL", "http://cobalt:9000")
+    import httpx
+
+    monkeypatch.setattr(
+        httpx, "post",
+        lambda *a, **k: _FakeResp(
+            {"status": "tunnel", "url": "http://cobalt:9000/tunnel?id=abc",
+             "filename": "Great Talk.mp4"}
+        ),
+    )
+    path, info = pipeline._download_via_cobalt("https://youtu.be/xyz", str(tmp_path))
+    assert path.endswith(".mp4")
+    assert info["title"] == "Great Talk"
+    assert info["duration"] == 42.0
+    assert _fake_stream["url"] == "http://cobalt:9000/tunnel?id=abc"
+
+
+def test_cobalt_error_status_raises(tmp_path, monkeypatch):
+    monkeypatch.setattr(pipeline.settings, "COBALT_API_URL", "http://cobalt:9000")
+    import httpx
+
+    monkeypatch.setattr(
+        httpx, "post",
+        lambda *a, **k: _FakeResp({"status": "error", "error": {"code": "content.video.unavailable"}}),
+    )
+    with pytest.raises(RuntimeError, match="content.video.unavailable"):
+        pipeline._download_via_cobalt("https://youtu.be/xyz", str(tmp_path))
+
+
+def test_remote_video_falls_back_to_ytdlp_on_cobalt_failure(tmp_path, monkeypatch):
+    monkeypatch.setattr(pipeline.settings, "COBALT_API_URL", "http://cobalt:9000")
+    import httpx
+
+    def boom(*a, **k):
+        raise httpx.ConnectError("cobalt down")
+
+    monkeypatch.setattr(httpx, "post", boom)
+    # yt-dlp is stubbed by the autouse _fake_ytdl fixture.
+    path, info = pipeline._download_remote_video("https://youtu.be/xyz", str(tmp_path))
+    assert info["id"] == "vid"  # came from the fake yt-dlp
+
+
+def test_remote_video_uses_ytdlp_when_cobalt_unset(tmp_path, monkeypatch):
+    monkeypatch.setattr(pipeline.settings, "COBALT_API_URL", "")
+    path, info = pipeline._download_remote_video("https://youtu.be/xyz", str(tmp_path))
+    assert info["id"] == "vid"

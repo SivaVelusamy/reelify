@@ -54,9 +54,15 @@ class Settings(BaseSettings):
     WHISPER_DEVICE: str = "cpu"
     WHISPER_COMPUTE_TYPE: str = "int8"
 
-    # YouTube ingest (yt-dlp)
-    # Netscape-format cookies.txt exported from a logged-in browser session.
-    # Lets yt-dlp fetch age-restricted / bot-flagged videos. Empty = no cookies.
+    # YouTube ingest — downloader.
+    # cobalt (https://cobalt.tools) is tried first when COBALT_API_URL is set;
+    # yt-dlp is the fallback (and the only path when it's empty).
+    COBALT_API_URL: str = ""  # e.g. http://cobalt:9000
+    COBALT_API_KEY: str = ""  # only if the instance requires Api-Key auth
+    COBALT_VIDEO_QUALITY: str = "1080"  # 144 .. "max"
+
+    # yt-dlp fallback. Netscape-format cookies.txt from a logged-in browser
+    # session lets it fetch age-restricted / bot-flagged videos.
     YT_DLP_COOKIES_FILE: str = ""
     YT_DLP_MAX_HEIGHT: int = 1080
     # yt-dlp's JS-challenge solver — fetches code at runtime, so opt-in
