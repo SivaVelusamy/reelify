@@ -118,7 +118,12 @@ def _patch_externals(monkeypatch):
         "app.services.project_service._enqueue_pipeline", lambda video_id: None
     )
     monkeypatch.setattr(
-        "app.services.library_service._enqueue_bundle", lambda bundle_id: None
+        "app.services.library_service._enqueue_bundle",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "app.services.library_service._enqueue_render",
+        lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
         "app.services.admin_service._broker_reachable", lambda: False

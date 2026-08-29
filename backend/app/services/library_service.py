@@ -461,7 +461,10 @@ def restore_version(
 # Download bundles
 # ---------------------------------------------------------------------------
 def create_bundle(db: Session, user: User, clip_ids: list[int]) -> DownloadBundle:
-    """Validate ownership + rendered state, then queue an async zip build."""
+    """Validate ownership, kick off renders for any clip not rendered yet, then
+    queue an async zip build. Clips still missing a render at build time are
+    listed in the bundle's MANIFEST.txt rather than failing the whole download.
+    """
     wanted = list(dict.fromkeys(clip_ids))
     if not wanted:
         raise ValidationError("clip_ids must not be empty")
@@ -475,13 +478,9 @@ def create_bundle(db: Session, user: User, clip_ids: list[int]) -> DownloadBundl
     if missing:
         raise NotFoundError("Clip")
 
-    not_rendered = sorted(
+    pending_render = sorted(
         c.id for c in clips if c.status != ClipStatus.rendered
     )
-    if not_rendered:
-        raise ValidationError(
-            f"All clips must be rendered; not rendered: {not_rendered}"
-        )
 
     bundle = DownloadBundle(
         user_id=user.id,
@@ -492,15 +491,30 @@ def create_bundle(db: Session, user: User, clip_ids: list[int]) -> DownloadBundl
     db.commit()
     db.refresh(bundle)
 
-    _enqueue_bundle(bundle.id)
+    for cid in pending_render:
+        _enqueue_render(cid)
+    # Give freshly-triggered renders a head start before the zip is assembled.
+    _enqueue_bundle(bundle.id, delay_seconds=10 if pending_render else 0)
     return bundle
 
 
-def _enqueue_bundle(bundle_id: int) -> None:
+def _enqueue_render(clip_id: int) -> None:
+    try:
+        from app.workers.render import render_clip
+
+        render_clip.delay(clip_id)
+    except Exception as exc:  # pragma: no cover - broker/environment dependent
+        logger.warning("Could not enqueue render for clip %s: %s", clip_id, exc)
+
+
+def _enqueue_bundle(bundle_id: int, delay_seconds: int = 0) -> None:
     try:
         from app.workers.bundles import build_bundle
 
-        build_bundle.delay(bundle_id)
+        if delay_seconds > 0:
+            build_bundle.apply_async(args=[bundle_id], countdown=delay_seconds)
+        else:
+            build_bundle.delay(bundle_id)
     except Exception as exc:  # pragma: no cover - broker/environment dependent
         logger.warning("Could not enqueue bundle build %s: %s", bundle_id, exc)
 

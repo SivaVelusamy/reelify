@@ -89,10 +89,20 @@ def test_version_restore_keeps_backup(client, db, make_clip, user, auth_headers)
     assert len(versions.json()) == 2
 
 
-def test_bundle_rejects_non_rendered(client, make_clip, user, auth_headers):
+def test_bundle_accepts_non_rendered_and_triggers_render(client, make_clip, user, auth_headers):
+    # A not-yet-rendered clip is allowed: the bundle build triggers its render
+    # and notes anything still missing in the manifest rather than 422-ing.
     draft = make_clip(user, status="draft")
     resp = client.post(
         f"{BASE}/library/bundles", json={"clip_ids": [draft.id]}, headers=auth_headers
+    )
+    assert resp.status_code == 202
+    assert resp.json()["status"] in {"queued", "building", "ready"}
+
+
+def test_bundle_rejects_empty_clip_ids(client, auth_headers):
+    resp = client.post(
+        f"{BASE}/library/bundles", json={"clip_ids": []}, headers=auth_headers
     )
     assert resp.status_code == 422
 
