@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { formatBytes, formatDuration } from '../lib/utils';
+import {
+  formatBytes,
+  formatDate,
+  formatDuration,
+  formatRelative,
+} from '../lib/utils';
 
 describe('formatDuration', () => {
   it('formats sub-hour durations as M:SS', () => {
@@ -22,5 +27,15 @@ describe('formatBytes', () => {
 
   it('returns 0 B for non-positive input', () => {
     expect(formatBytes(0)).toBe('0 B');
+  });
+});
+
+describe('date helpers tolerate missing values', () => {
+  it('returns empty string for null / undefined / empty', () => {
+    expect(formatRelative(null)).toBe('');
+    expect(formatRelative(undefined)).toBe('');
+    expect(formatRelative('')).toBe('');
+    expect(formatDate(null)).toBe('');
+    expect(formatDate(undefined)).toBe('');
   });
 });

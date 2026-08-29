@@ -40,7 +40,11 @@ export function ProjectCard({ project, videoCount }: ProjectCardProps) {
           ) : (
             <span />
           )}
-          <span>Updated {formatRelative(project.updated_at)}</span>
+          <span>
+            {project.updated_at
+              ? `Updated ${formatRelative(project.updated_at)}`
+              : `Created ${formatRelative(project.created_at)}`}
+          </span>
         </div>
       </GlassCard>
     </Link>

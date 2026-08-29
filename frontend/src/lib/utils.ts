@@ -37,20 +37,24 @@ export function formatBytes(bytes: number, decimals = 1): string {
   return `${value.toFixed(exponent === 0 ? 0 : decimals)} ${units[exponent]}`;
 }
 
-/** Format an ISO date string (or Date) as a readable date. */
-export function formatDate(input: string | Date, pattern = 'MMM d, yyyy'): string {
-  const date = typeof input === 'string' ? parseISO(input) : input;
-  if (Number.isNaN(date.getTime())) {
-    return '';
+type DateInput = string | Date | null | undefined;
+
+function toDate(input: DateInput): Date | null {
+  if (input == null || input === '') {
+    return null;
   }
-  return format(date, pattern);
+  const date = typeof input === 'string' ? parseISO(input) : input;
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** Format an ISO date string (or Date) as a readable date. Empty string for null/invalid. */
+export function formatDate(input: DateInput, pattern = 'MMM d, yyyy'): string {
+  const date = toDate(input);
+  return date ? format(date, pattern) : '';
 }
 
 /** Format an ISO date string (or Date) as a relative time, e.g. "3 hours ago". */
-export function formatRelative(input: string | Date): string {
-  const date = typeof input === 'string' ? parseISO(input) : input;
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-  return formatDistanceToNow(date, { addSuffix: true });
+export function formatRelative(input: DateInput): string {
+  const date = toDate(input);
+  return date ? formatDistanceToNow(date, { addSuffix: true }) : '';
 }

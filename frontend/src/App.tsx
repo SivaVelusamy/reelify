@@ -5,6 +5,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AdminRoute } from './components/auth/AdminRoute';
 import { AppShell } from './components/layout/AppShell';
+import { ErrorBoundary } from './components/layout/ErrorBoundary';
 import { MeshBackground } from './components/layout/MeshBackground';
 import { Spinner } from './components/ui/Spinner';
 
@@ -79,7 +80,9 @@ function PublicScreen({ name }: { name: string }) {
 function Protected({ children }: { children: ReactNode }) {
   return (
     <ProtectedRoute>
-      <AppShell>{children}</AppShell>
+      <AppShell>
+        <ErrorBoundary>{children}</ErrorBoundary>
+      </AppShell>
     </ProtectedRoute>
   );
 }
@@ -88,7 +91,9 @@ function Protected({ children }: { children: ReactNode }) {
 function AdminOnly({ children }: { children: ReactNode }) {
   return (
     <AdminRoute>
-      <AppShell>{children}</AppShell>
+      <AppShell>
+        <ErrorBoundary>{children}</ErrorBoundary>
+      </AppShell>
     </AdminRoute>
   );
 }
@@ -106,8 +111,9 @@ function Providers({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <Providers>
-      <Suspense fallback={<PageFallback />}>
-        <Routes>
+      <ErrorBoundary>
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
           {/* ---------- Public (self-contained: own MeshBackground) ---------- */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
@@ -157,10 +163,11 @@ export default function App() {
           <Route path="/admin/users" element={<AdminOnly><AdminUsersPage /></AdminOnly>} />
           <Route path="/admin/jobs" element={<AdminOnly><AdminJobsPage /></AdminOnly>} />
 
-          {/* ---------- Fallback ---------- */}
-          <Route path="*" element={<PublicScreen name="NotFoundPage" />} />
-        </Routes>
-      </Suspense>
+            {/* ---------- Fallback ---------- */}
+            <Route path="*" element={<PublicScreen name="NotFoundPage" />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
     </Providers>
   );
 }
