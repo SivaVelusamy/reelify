@@ -8,13 +8,10 @@ Each stage runs inside :func:`_pipeline_stage`, which opens a DB session, and on
 any exception sets ``SourceVideo.status = failed`` + ``error_message`` and
 re-raises. The next stage is only enqueued when the current one succeeds.
 
-STUBS (no real third-party keys in this template):
-  * ``transcribe`` — no speech-to-text call; a placeholder transcript is
-    generated with one ~30s segment across the video duration.
-  * ``analyze`` — no ML ranking; candidate windows (20-60s) are scored with a
-    cheap deterministic heuristic and stored as ``suggested`` Clip rows.
-  * ``finalize`` — sends the "processing complete" email only if an
-    ``app.services.email_service`` module exists; otherwise it just logs.
+``transcribe`` runs real speech-to-text via :mod:`app.media.transcription`
+(local faster-whisper by default, OpenAI when a key is set, stub as a last
+resort). ``analyze`` still uses a heuristic ranker, and ``finalize`` only sends
+email if an ``app.services.email_service`` module exists.
 """
 
 import functools
@@ -36,7 +33,6 @@ from app.workers import celery
 
 logger = logging.getLogger(__name__)
 
-SEGMENT_SECONDS = 30.0
 MIN_CLIP_SECONDS = 20.0
 MAX_CLIP_SECONDS = 60.0
 MAX_SUGGESTED_CLIPS = 10
@@ -146,12 +142,14 @@ def ingest_source_video(db, video_id: int) -> int:
             )
             video.language = info.get("language") or "en"
     else:
-        # Upload path: probe the object via a short-lived signed URL.
+        # Upload path: download the object and probe the local file.
         duration = None
         if video.storage_key:
             try:
-                signed = storage.generate_presigned_url(video.storage_key, ttl=600)
-                duration = _probe_duration(signed)
+                with tempfile.TemporaryDirectory(prefix="reelify-probe-") as tmp:
+                    local = os.path.join(tmp, "source")
+                    storage.download_to_path(video.storage_key, local)
+                    duration = _probe_duration(local)
             except Exception as exc:  # pragma: no cover - environment dependent
                 logger.warning("Could not probe upload %s: %s", video.storage_key, exc)
         video.duration_seconds = duration or DEFAULT_DURATION_SECONDS
@@ -166,35 +164,37 @@ def ingest_source_video(db, video_id: int) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Stage 2: transcribe (STUB)
+# Stage 2: transcribe (real speech-to-text via app.media.transcription)
 # ---------------------------------------------------------------------------
 @celery.task(name="app.workers.pipeline.transcribe")
 @_pipeline_stage
 def transcribe(db, video_id: int) -> int:
+    from app import storage
+    from app.media import transcription
+
     video = _require_video(db, video_id)
     video.status = SourceVideoStatus.transcribing
     db.commit()
 
     duration = float(video.duration_seconds or DEFAULT_DURATION_SECONDS)
-    language = video.language or "en"
+    language = video.language or None
 
-    segments: list[dict] = []
-    start = 0.0
-    index = 0
-    while start < duration:
-        end = min(start + SEGMENT_SECONDS, duration)
-        segments.append(
-            {
-                "start": round(start, 2),
-                "end": round(end, 2),
-                "text": f"[placeholder transcript segment {index + 1}]",
-                "speaker": "SPEAKER_00",
-            }
+    result = None
+    if video.storage_key:
+        with tempfile.TemporaryDirectory(prefix="reelify-stt-") as tmp:
+            src = os.path.join(tmp, "source")
+            try:
+                storage.download_to_path(video.storage_key, src)
+                result = transcription.transcribe(
+                    src, language=language, duration=duration
+                )
+            except Exception as exc:  # pragma: no cover - environment dependent
+                logger.warning("transcribe: could not process %s: %s", video.storage_key, exc)
+
+    if result is None:
+        result = transcription.transcribe(
+            "", language=language, duration=duration
         )
-        start = end
-        index += 1
-
-    full_text = " ".join(s["text"] for s in segments)
 
     if video.transcript is not None:
         db.delete(video.transcript)
@@ -203,11 +203,13 @@ def transcribe(db, video_id: int) -> int:
     db.add(
         Transcript(
             source_video_id=video.id,
-            language=language,
-            full_text=full_text,
-            segments=segments,
+            language=result.language,
+            full_text=result.full_text,
+            segments=result.segments,
         )
     )
+    if not video.language:
+        video.language = result.language
     db.commit()
 
     analyze.delay(video_id)

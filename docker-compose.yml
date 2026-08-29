@@ -92,6 +92,9 @@ services:
     env_file:
       - .env
     command: ["celery", "-A", "app.workers", "worker", "--loglevel=info"]
+    volumes:
+      # Persist downloaded Whisper models across restarts.
+      - whispercache:/home/appuser/.cache
     depends_on:
       db:
         condition: service_healthy
@@ -127,3 +130,4 @@ services:
 volumes:
   pgdata:
   miniodata:
+  whispercache:

@@ -25,9 +25,13 @@ COPY alembic.ini ./alembic.ini
 COPY entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
-# Non-root runtime user
+# Non-root runtime user. Pre-create the cache dir so the `whispercache` named
+# volume inherits appuser ownership (Docker seeds a fresh volume from this path).
 RUN useradd --create-home --shell /bin/sh appuser \
-    && chown -R appuser:appuser /app
+    && mkdir -p /home/appuser/.cache \
+    && chown -R appuser:appuser /app /home/appuser/.cache
+ENV HF_HOME=/home/appuser/.cache/huggingface \
+    XDG_CACHE_HOME=/home/appuser/.cache
 USER appuser
 
 EXPOSE 8000

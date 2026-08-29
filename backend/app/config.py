@@ -41,7 +41,16 @@ class Settings(BaseSettings):
     SIGNED_URL_TTL_SECONDS: int = 3600
 
     # Transcription
-    TRANSCRIPTION_API_KEY: str = ""
+    # Provider: "auto" (OpenAI if a key is set, else local Whisper, else stub) |
+    # "openai" | "whisper" (local faster-whisper) | "stub".
+    TRANSCRIPTION_PROVIDER: str = "auto"
+    TRANSCRIPTION_API_KEY: str = ""  # OpenAI (or compatible) API key
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_TRANSCRIBE_MODEL: str = "whisper-1"
+    # Local faster-whisper settings (used by the "whisper" / "auto" providers).
+    WHISPER_MODEL: str = "base"  # tiny | base | small | medium | large-v3
+    WHISPER_DEVICE: str = "cpu"
+    WHISPER_COMPUTE_TYPE: str = "int8"
 
     # Stripe
     STRIPE_SECRET_KEY: str = "sk_test_placeholder"
