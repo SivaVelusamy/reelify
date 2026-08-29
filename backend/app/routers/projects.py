@@ -101,20 +101,22 @@ async def delete_project(
 async def add_source_video(
     project_id: int,
     file: UploadFile | None = File(default=None),
+    url: str | None = Form(default=None),
     youtube_url: str | None = Form(default=None),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_active_user),
 ) -> SourceVideoResponse:
-    """Accept a multipart video file OR a ``youtube_url`` form field."""
+    """Accept a multipart video ``file`` OR a YouTube ``url`` form field."""
     if file is not None:
         return project_service.create_source_video_from_upload(
             db, user, project_id, file
         )
-    if youtube_url:
+    link = (url or youtube_url or "").strip()
+    if link:
         return project_service.create_source_video_from_youtube(
-            db, user, project_id, youtube_url
+            db, user, project_id, link
         )
-    raise ValidationError("Provide either a video file or a youtube_url")
+    raise ValidationError("Provide either a video file or a YouTube url")
 
 
 @router.post(

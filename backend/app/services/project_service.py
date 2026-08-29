@@ -31,6 +31,9 @@ ALLOWED_YOUTUBE_HOSTS = {
     "youtube.com",
     "www.youtube.com",
     "m.youtube.com",
+    "music.youtube.com",
+    "youtube-nocookie.com",
+    "www.youtube-nocookie.com",
     "youtu.be",
 }
 

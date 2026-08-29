@@ -48,7 +48,9 @@ class Settings(BaseSettings):
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     OPENAI_TRANSCRIBE_MODEL: str = "whisper-1"
     # Local faster-whisper settings (used by the "whisper" / "auto" providers).
-    WHISPER_MODEL: str = "base"  # tiny | base | small | medium | large-v3
+    # "tiny" is the scaffold default — fast on CPU; bump to base/small/medium
+    # for better accuracy if the worker has the CPU/RAM headroom.
+    WHISPER_MODEL: str = "tiny"  # tiny | base | small | medium | large-v3
     WHISPER_DEVICE: str = "cpu"
     WHISPER_COMPUTE_TYPE: str = "int8"
 

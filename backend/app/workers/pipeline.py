@@ -100,22 +100,53 @@ def _probe_duration(source: str) -> float | None:
         return None
 
 
+#: Cap the download so a huge 4K upload can't blow past MAX_SOURCE_BYTES.
+_YT_MAX_HEIGHT = 1080
+_YT_MAX_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB, matches the file-upload limit
+
+
 def _download_youtube(url: str, dest_dir: str) -> tuple[str, dict]:
-    import yt_dlp
+    from yt_dlp import YoutubeDL
+    from yt_dlp.utils import DownloadError
 
     opts = {
-        "format": "bv*+ba/b",
+        # Best <=1080p video + best audio, falling back to a single progressive stream.
+        "format": (
+            f"bv*[height<={_YT_MAX_HEIGHT}]+ba/"
+            f"b[height<={_YT_MAX_HEIGHT}]/bv*+ba/b"
+        ),
         "outtmpl": os.path.join(dest_dir, "%(id)s.%(ext)s"),
+        "merge_output_format": "mp4",
+        "noplaylist": True,
         "quiet": True,
         "noprogress": True,
-        "merge_output_format": "mp4",
+        "retries": 3,
+        "socket_timeout": 30,
+        "max_filesize": _YT_MAX_BYTES,
     }
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        path = ydl.prepare_filename(info)
+    # yt-dlp's newest signature-challenge solver ("EJS remote components") is
+    # opt-in because it downloads code at runtime. Enable it only when the
+    # operator sets YT_DLP_REMOTE_COMPONENTS (e.g. "ejs:github").
+    remote = os.getenv("YT_DLP_REMOTE_COMPONENTS", "").strip()
+    if remote:
+        opts["remote_components"] = [remote]
+    try:
+        with YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            path = ydl.prepare_filename(info)
+    except DownloadError as exc:
+        # Surface a clean message on the SourceVideo row (the pipeline wrapper
+        # writes str(exc) into error_message).
+        raise RuntimeError(f"YouTube download failed: {exc}") from exc
+
     if not os.path.exists(path):
         base, _ = os.path.splitext(path)
-        path = base + ".mp4"
+        for ext in (".mp4", ".mkv", ".webm"):
+            if os.path.exists(base + ext):
+                path = base + ext
+                break
+    if not os.path.exists(path):
+        raise RuntimeError("YouTube download produced no file (video may be unavailable)")
     return path, info
 
 
@@ -132,15 +163,23 @@ def ingest_source_video(db, video_id: int) -> int:
     if video.source_type == SourceType.youtube_url:
         with tempfile.TemporaryDirectory(prefix="reelify-ingest-") as tmp:
             path, info = _download_youtube(video.original_url, tmp)
+            ext = os.path.splitext(path)[1].lstrip(".").lower() or "mp4"
+            content_type = {"webm": "video/webm", "mkv": "video/x-matroska"}.get(
+                ext, "video/mp4"
+            )
             key = f"sources/{video.user_id}/{video.id}/{os.path.basename(path)}"
             with open(path, "rb") as fh:
-                storage.upload_fileobj(key, fh, "video/mp4")
+                storage.upload_fileobj(key, fh, content_type)
             video.storage_key = key
-            video.filename = os.path.basename(path)
+            video.filename = info.get("title") or os.path.basename(path)
             video.duration_seconds = (
-                float(info.get("duration")) if info.get("duration") else None
+                float(info["duration"]) if info.get("duration") else None
             )
             video.language = info.get("language") or "en"
+            logger.info(
+                "ingest: downloaded YouTube video %s (%s, %.0fs) -> %s",
+                info.get("id"), ext, video.duration_seconds or 0, key,
+            )
     else:
         # Upload path: download the object and probe the local file.
         duration = None

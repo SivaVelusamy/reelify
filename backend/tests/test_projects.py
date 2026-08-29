@@ -80,6 +80,18 @@ def test_youtube_url_host_validation(client, make_project, user, auth_headers):
     assert good.json()["source_type"] == "youtube_url"
 
 
+def test_youtube_import_accepts_url_field(client, make_project, user, auth_headers):
+    # The frontend posts the link as `url`, not `youtube_url`.
+    project = make_project(user)
+    resp = client.post(
+        f"{BASE}/projects/{project.id}/videos",
+        data={"url": "https://youtu.be/dQw4w9WgXcQ"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 202
+    assert resp.json()["source_type"] == "youtube_url"
+
+
 def test_add_video_missing_payload_422(client, make_project, user, auth_headers):
     project = make_project(user)
     resp = client.post(f"{BASE}/projects/{project.id}/videos", headers=auth_headers)
