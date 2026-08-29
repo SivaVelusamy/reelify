@@ -39,3 +39,7 @@ Thumbs.db
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
+
+# yt-dlp cookies (never commit real session cookies)
+cookies.txt
+**/cookies.txt
