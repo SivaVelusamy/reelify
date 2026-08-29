@@ -12,6 +12,7 @@ from urllib.parse import urlencode
 import httpx
 
 from app.config import settings
+from app.services.publishing.base import use_stub_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -39,15 +40,14 @@ def build_auth_url(state: str) -> str:
 
 
 def exchange_code(code: str) -> dict:
-    if not settings.YOUTUBE_CLIENT_ID:
-        logger.info(
-            "youtube.exchange_code: no YOUTUBE_CLIENT_ID — returning STUB tokens"
-        )
+    if use_stub_tokens(code, settings.YOUTUBE_CLIENT_ID):
+        logger.info("youtube.exchange_code: simulated / unconfigured — STUB tokens")
         return {
             "access_token": f"stub-youtube-access-{secrets.token_hex(8)}",
             "refresh_token": f"stub-youtube-refresh-{secrets.token_hex(8)}",
             "expires_in": 3600,
             "scope": SCOPES,
+            "user_id": f"yt-sim-{secrets.token_hex(4)}",
         }
 
     with httpx.Client(timeout=_HTTP_TIMEOUT) as client:

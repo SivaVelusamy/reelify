@@ -13,6 +13,7 @@ from urllib.parse import urlencode
 import httpx
 
 from app.config import settings
+from app.services.publishing.base import use_stub_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +46,8 @@ def exchange_code(code: str) -> dict:
     ``expires_in``. Without configured credentials (template default) this
     returns deterministic stub tokens so the connect flow is testable.
     """
-    if not settings.TIKTOK_CLIENT_KEY:
-        logger.info("tiktok.exchange_code: no TIKTOK_CLIENT_KEY — returning STUB tokens")
+    if use_stub_tokens(code, settings.TIKTOK_CLIENT_KEY):
+        logger.info("tiktok.exchange_code: simulated / unconfigured — STUB tokens")
         return {
             "access_token": f"stub-tiktok-access-{secrets.token_hex(8)}",
             "refresh_token": f"stub-tiktok-refresh-{secrets.token_hex(8)}",

@@ -10,8 +10,41 @@ def test_connect_returns_auth_url_and_state(client, auth_headers):
     resp = client.post(f"{BASE}/social-accounts/connect/tiktok", headers=auth_headers)
     assert resp.status_code == 200
     body = resp.json()
-    assert body["auth_url"].startswith("https://")
     assert body["state"]
+    # No real OAuth creds in tests -> simulated connect points at our own callback.
+    assert "/social-accounts/callback/tiktok" in body["auth_url"]
+    assert "code=simulated" in body["auth_url"]
+
+
+def test_connect_uses_real_provider_when_configured(client, auth_headers, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "YOUTUBE_CLIENT_ID", "real-google-client-id")
+    resp = client.post(f"{BASE}/social-accounts/connect/youtube", headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["auth_url"].startswith("https://accounts.google.com/")
+
+
+def test_simulated_connect_end_to_end(client, db, user):
+    from app.models.publishing import SocialAccount
+    from app.services.oauth_state import issue_state
+
+    state = issue_state(user.id, "youtube")
+    resp = client.get(
+        f"{BASE}/social-accounts/callback/youtube",
+        params={"code": "simulated", "state": state},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert "connected=youtube" in resp.headers["location"]
+    assert "simulated=1" in resp.headers["location"]
+    acct = (
+        db.query(SocialAccount)
+        .filter(SocialAccount.user_id == user.id, SocialAccount.platform == "youtube")
+        .one()
+    )
+    assert acct.status.value == "connected"
+    assert acct.access_token_encrypted  # stub token stored (encrypted)
 
 
 def test_connect_unknown_platform_422(client, auth_headers):

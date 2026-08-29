@@ -13,6 +13,7 @@ from urllib.parse import urlencode
 import httpx
 
 from app.config import settings
+from app.services.publishing.base import use_stub_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +39,8 @@ def build_auth_url(state: str) -> str:
 
 
 def exchange_code(code: str) -> dict:
-    if not settings.INSTAGRAM_CLIENT_ID:
-        logger.info(
-            "instagram.exchange_code: no INSTAGRAM_CLIENT_ID — returning STUB tokens"
-        )
+    if use_stub_tokens(code, settings.INSTAGRAM_CLIENT_ID):
+        logger.info("instagram.exchange_code: simulated / unconfigured — STUB tokens")
         return {
             "access_token": f"stub-instagram-access-{secrets.token_hex(8)}",
             "refresh_token": None,

@@ -171,20 +171,52 @@ def _upsert_webhook_account(
 # --------------------------------------------------------------------------- #
 # OAuth connect
 # --------------------------------------------------------------------------- #
+_PLACEHOLDER_MARKERS = ("changeme", "placeholder", "your-", "xxx")
+
+#: env var that holds each platform's OAuth client id/key
+_PLATFORM_CLIENT_SETTING = {
+    "tiktok": "TIKTOK_CLIENT_KEY",
+    "instagram": "INSTAGRAM_CLIENT_ID",
+    "youtube": "YOUTUBE_CLIENT_ID",
+}
+
+
+def social_platform_configured(platform: str) -> bool:
+    """True when real OAuth credentials are set for ``platform``."""
+    name = _PLATFORM_CLIENT_SETTING.get(platform)
+    value = (getattr(settings, name, "") or "").strip().lower() if name else ""
+    return bool(value) and not any(m in value for m in _PLACEHOLDER_MARKERS)
+
+
 def connect_start(db: Session, user: User, platform: str) -> ConnectStartResponse:
     if platform not in SOCIAL_PLATFORMS:
         raise ValidationError(f"Unsupported OAuth platform: {platform}")
-    adapter = SOCIAL_ADAPTERS[platform]
     state = issue_state(user.id, platform)
+
+    if not social_platform_configured(platform):
+        # No real OAuth app configured — simulate the connect by sending the
+        # browser straight to our own callback (mirrors Stripe simulation mode).
+        logger.info("connect_start: %s not configured — simulated connect", platform)
+        base = settings.OAUTH_REDIRECT_BASE_URL.rstrip("/")
+        auth_url = f"{base}/{platform}?code=simulated&state={state}"
+        return ConnectStartResponse(auth_url=auth_url, state=state)
+
+    adapter = SOCIAL_ADAPTERS[platform]
     return ConnectStartResponse(auth_url=adapter.build_auth_url(state), state=state)
 
 
-def oauth_callback(db: Session, platform: str, code: str, state: str) -> SocialAccount:
+def verify_connect_state(platform: str, state: str) -> dict:
+    """Validate the signed OAuth ``state``. Raises ValidationError on any problem."""
     if platform not in SOCIAL_PLATFORMS:
         raise ValidationError(f"Unsupported OAuth platform: {platform}")
+    return verify_state(state, platform)
 
-    body = verify_state(state, platform)
-    user_id = int(body["user_id"])
+
+def complete_oauth_callback(
+    db: Session, platform: str, code: str, state_body: dict
+) -> SocialAccount:
+    """Exchange ``code`` for tokens and persist the SocialAccount."""
+    user_id = int(state_body["user_id"])
     adapter = SOCIAL_ADAPTERS[platform]
 
     tokens = adapter.exchange_code(code)

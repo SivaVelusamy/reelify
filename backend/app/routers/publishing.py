@@ -6,6 +6,7 @@ active user except ``GET /s/{slug}`` (public share view) and
 browser here with a signed ``state`` that carries the user identity).
 """
 
+import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, status
@@ -30,6 +31,7 @@ from app.schemas.publishing import (
 )
 from app.services import publishing_service
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["publishing"])
 
 
@@ -62,9 +64,20 @@ def social_account_callback(
 ) -> RedirectResponse:
     # Sync def: the OAuth code-for-token exchange uses a blocking httpx.Client,
     # so FastAPI runs this in the threadpool instead of on the event loop.
-    publishing_service.oauth_callback(db, platform, code, state)
+    # A bad/tampered state raises ValidationError (-> 422); a downstream provider
+    # failure sends the user back to the UI with an error flag.
+    body = publishing_service.verify_connect_state(platform, state)
+    try:
+        publishing_service.complete_oauth_callback(db, platform, code, body)
+    except Exception as exc:  # noqa: BLE001 - always return the user to the UI
+        logger.warning("social callback failed for %s: %s", platform, exc)
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_URL}/settings/connections?connect_error={platform}",
+            status_code=status.HTTP_302_FOUND,
+        )
+    sim = "" if publishing_service.social_platform_configured(platform) else "&simulated=1"
     return RedirectResponse(
-        url=f"{settings.FRONTEND_URL}/settings/connections?connected={platform}",
+        url=f"{settings.FRONTEND_URL}/settings/connections?connected={platform}{sim}",
         status_code=status.HTTP_302_FOUND,
     )
 

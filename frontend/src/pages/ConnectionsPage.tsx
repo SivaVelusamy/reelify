@@ -14,7 +14,12 @@ import {
 export default function ConnectionsPage() {
   const [params] = useSearchParams();
   const justConnected = params.get('connected');
+  const connectError = params.get('connect_error');
+  const simulated = params.get('simulated') === '1';
   const { data: accounts, isLoading, isError, refetch } = useSocialAccounts();
+
+  const label = (p: string) =>
+    PLATFORM_LABELS[p as keyof typeof PLATFORM_LABELS] ?? p;
 
   return (
     <PageWrapper>
@@ -22,7 +27,9 @@ export default function ConnectionsPage() {
         <header>
           <h1 className="text-2xl font-semibold text-slate-900">Connections</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Connect the destinations Reelify can publish your clips to.
+            Connect the destinations Reelify can publish your clips to. TikTok,
+            Instagram and YouTube use a simulated connection until real OAuth
+            credentials are configured — publishing to them is stubbed.
           </p>
         </header>
 
@@ -31,9 +38,17 @@ export default function ConnectionsPage() {
             role="status"
             className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"
           >
-            {PLATFORM_LABELS[justConnected as keyof typeof PLATFORM_LABELS] ??
-              justConnected}{' '}
-            connected.
+            {label(justConnected)} connected
+            {simulated ? ' (simulated).' : '.'}
+          </div>
+        )}
+
+        {connectError && (
+          <div
+            role="alert"
+            className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          >
+            Could not connect {label(connectError)}. Please try again.
           </div>
         )}
 
