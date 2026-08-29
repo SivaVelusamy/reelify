@@ -1,0 +1,47 @@
+# Development override:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# - Live-reload backend / worker / beat from the host source tree
+# - Run the Vite dev server instead of the nginx production build
+# - Expose Postgres and Redis to the host for local tooling
+
+services:
+  db:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  backend:
+    volumes:
+      - ./backend:/app
+    command:
+      ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  worker:
+    volumes:
+      - ./backend:/app
+    command:
+      ["celery", "-A", "app.workers", "worker", "--loglevel=debug"]
+
+  beat:
+    volumes:
+      - ./backend:/app
+    command:
+      ["celery", "-A", "app.workers", "beat", "--loglevel=debug"]
+
+  frontend:
+    build: !reset null
+    image: node:20-alpine
+    working_dir: /app
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["npm install && npm run dev -- --host 0.0.0.0 --port 5173"]
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports: !override
+      - "5173:5173"
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}

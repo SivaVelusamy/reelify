@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-start: #a855f7;
+  --brand-end: #ec4899;
+  --surface: #ffffff;
+  --surface-muted: #f7f5fb;
+  --border-subtle: rgba(15, 23, 42, 0.08);
+  --content: #0f172a;
+  --content-muted: #64748b;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: var(--content);
+  background: var(--surface-muted);
+  -webkit-font-smoothing: antialiased;
+}
