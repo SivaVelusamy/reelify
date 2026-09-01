@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { Download, Send } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Download, Send, Trash2 } from 'lucide-react';
 import { PageWrapper } from '../components/layout/PageWrapper';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GradientButton } from '../components/ui/GradientButton';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Spinner } from '../components/ui/Spinner';
 import { EmptyState } from '../components/ui/EmptyState';
 import { VersionHistoryList } from '../components/library/VersionHistoryList';
-import { useClip } from '../hooks/useClips';
+import { useClip, useDeleteClip } from '../hooks/useClips';
 import {
   useBundle,
   useCreateBundle,
@@ -31,14 +32,17 @@ export default function LibraryClipPage() {
   const clipQuery = useClip(clipId);
   const detail = clipQuery.data as LibraryClipDetail | undefined;
 
+  const navigate = useNavigate();
   const { data: allTags } = useTags();
   const setTags = useSetClipTags(clipId);
   const createBundle = useCreateBundle();
+  const deleteClip = useDeleteClip();
 
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [tagError, setTagError] = useState<string | null>(null);
   const [bundleId, setBundleId] = useState<number | null>(null);
   const [bundleError, setBundleError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const { data: bundle } = useBundle(bundleId);
 
@@ -161,6 +165,14 @@ export default function LibraryClipPage() {
             >
               Edit
             </Link>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="inline-flex items-center gap-2 rounded-full border border-red-200 px-5 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50"
+            >
+              <Trash2 size={16} />
+              Delete
+            </button>
             {bundleId && bundle && (
               <span className="flex items-center gap-2 text-sm">
                 <StatusBadge status={bundle.status} />
@@ -245,6 +257,18 @@ export default function LibraryClipPage() {
       <div className="mt-6">
         <VersionHistoryList clipId={clipId} />
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={async () => {
+          await deleteClip.mutateAsync(clipId);
+          navigate('/library');
+        }}
+        title="Delete this clip?"
+        body="It will be removed from your library. The source video and transcript are not affected."
+        confirmLabel="Delete clip"
+      />
     </PageWrapper>
   );
 }

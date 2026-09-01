@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Film } from 'lucide-react';
+import { Film, Trash2 } from 'lucide-react';
 import { formatDuration } from '../../lib/utils';
+import { useDeleteClip } from '../../hooks/useClips';
 import type { LibraryClip } from '../../types/library';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { GlassCard } from '../ui/GlassCard';
 import { StatusBadge } from '../ui/StatusBadge';
 
@@ -39,6 +42,8 @@ function LibraryClipCard({
   onToggleSelect,
 }: LibraryClipCardProps) {
   const duration = Math.max(clip.end_seconds - clip.start_seconds, 0);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const deleteClip = useDeleteClip();
 
   return (
     <GlassCard className="flex flex-col gap-3 p-4">
@@ -46,15 +51,25 @@ function LibraryClipCard({
         <div className="flex h-16 w-12 flex-none items-center justify-center rounded-lg bg-slate-900/80 text-slate-300">
           <Film size={18} />
         </div>
-        <label className="flex items-center gap-2 text-xs font-medium text-slate-500">
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={onToggleSelect}
-            className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-          />
-          Select
-        </label>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-500">
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onToggleSelect}
+              className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            />
+            Select
+          </label>
+          <button
+            type="button"
+            onClick={() => setConfirmOpen(true)}
+            aria-label={`Delete ${clip.title || 'clip'}`}
+            className="rounded-full p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
       </div>
 
       <div className="flex items-start justify-between gap-2">
@@ -103,6 +118,15 @@ function LibraryClipCard({
           Publish
         </Link>
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={() => deleteClip.mutateAsync(clip.id)}
+        title="Delete this clip?"
+        body={`“${clip.title || 'Untitled clip'}” will be removed from your library. Its source video and transcript are not affected.`}
+        confirmLabel="Delete clip"
+      />
     </GlassCard>
   );
 }

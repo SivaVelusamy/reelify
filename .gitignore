@@ -8,6 +8,7 @@ venv/
 .ruff_cache/
 .mypy_cache/
 .coverage
+.coverage.*
 coverage.xml
 htmlcov/
 
@@ -17,13 +18,44 @@ dist/
 build/
 coverage/
 .vite/
+.eslintcache
+.turbo/
+*.log
 npm-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
 # --- Environment / secrets ---
 .env
 .env.*
 !.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Credential files (OAuth downloads, keys, certs) — never commit
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+client_secret*.json
+service-account*.json
+
+# Local secrets mount (see secrets/.gitignore)
+/secrets/*
+!/secrets/.gitkeep
+!/secrets/.gitignore
+
+# yt-dlp / cobalt session cookies (real YouTube session data)
+cookies.txt
+**/cookies.txt
+
+# --- Media / pipeline scratch (ffmpeg render, transcription, downloads) ---
+/media/
+/uploads/
+/tmp/
+*.local
 
 # --- OS ---
 .DS_Store
@@ -40,6 +72,5 @@ Thumbs.db
 vite.config.js
 vite.config.d.ts
 
-# yt-dlp cookies (never commit real session cookies)
-cookies.txt
-**/cookies.txt
+# --- Docker ---
+docker-compose.override.yml

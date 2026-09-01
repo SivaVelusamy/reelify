@@ -1,6 +1,8 @@
-import { ArrowLeft, Clapperboard } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { ArrowLeft, Clapperboard, Trash2 } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { PageWrapper } from '../components/layout/PageWrapper';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GradientButton } from '../components/ui/GradientButton';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -9,6 +11,7 @@ import { StatusBadge } from '../components/ui/StatusBadge';
 import { StatusTracker } from '../components/projects/StatusTracker';
 import { TranscriptPreview } from '../components/projects/TranscriptPreview';
 import {
+  useDeleteVideo,
   useSourceVideo,
   useTranscript,
   useVideoStatus,
@@ -17,11 +20,14 @@ import { formatDate, formatDuration } from '../lib/utils';
 
 export default function SourceVideoPage() {
   const params = useParams();
+  const navigate = useNavigate();
   const id = Number(params.id);
   const videoId = Number.isFinite(id) ? id : undefined;
 
   const { data: video, isLoading, isError, refetch } = useSourceVideo(videoId);
   const { data: statusData } = useVideoStatus(videoId);
+  const deleteVideo = useDeleteVideo();
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const status = statusData?.status ?? video?.status;
   const errorMessage = statusData?.error_message ?? video?.error_message ?? null;
@@ -80,16 +86,26 @@ export default function SourceVideoPage() {
             <StatusBadge status={status} />
           </div>
         </div>
-        {isReady && (
-          <Link to={`/videos/${video.id}/clips`}>
-            <GradientButton type="button">
-              <span className="inline-flex items-center gap-2">
-                <Clapperboard size={16} />
-                View clips
-              </span>
-            </GradientButton>
-          </Link>
-        )}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            className="inline-flex items-center gap-2 rounded-full border border-red-200 px-5 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50"
+          >
+            <Trash2 size={16} />
+            Delete
+          </button>
+          {isReady && (
+            <Link to={`/videos/${video.id}/clips`}>
+              <GradientButton type="button">
+                <span className="inline-flex items-center gap-2">
+                  <Clapperboard size={16} />
+                  View clips
+                </span>
+              </GradientButton>
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="mb-6">
@@ -154,6 +170,18 @@ export default function SourceVideoPage() {
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={async () => {
+          await deleteVideo.mutateAsync(video.id);
+          navigate(`/projects/${video.project_id}`);
+        }}
+        title="Delete this video?"
+        body="The source video, its transcript and every clip generated from it will be deleted. This cannot be undone."
+        confirmLabel="Delete video"
+      />
     </PageWrapper>
   );
 }

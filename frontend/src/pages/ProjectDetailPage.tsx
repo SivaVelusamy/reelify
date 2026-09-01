@@ -1,48 +1,80 @@
-import { ArrowLeft, Film, Megaphone } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { ArrowLeft, Film, Megaphone, Trash2 } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { PageWrapper } from '../components/layout/PageWrapper';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { GlassCard } from '../components/ui/GlassCard';
 import { GradientButton } from '../components/ui/GradientButton';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Spinner } from '../components/ui/Spinner';
 import { StatusBadge } from '../components/ui/StatusBadge';
-import { useProject, useProjectVideos } from '../hooks/useProjects';
+import {
+  useDeleteProject,
+  useProject,
+  useProjectVideos,
+} from '../hooks/useProjects';
+import { useDeleteVideo } from '../hooks/useSourceVideo';
 import { formatDate, formatDuration, formatRelative } from '../lib/utils';
 import type { SourceVideo } from '../types';
 
 function VideoRow({ video }: { video: SourceVideo }) {
   const label = video.filename || video.original_url || `Video #${video.id}`;
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const deleteVideo = useDeleteVideo();
+
   return (
-    <Link
-      to={`/videos/${video.id}`}
-      className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3 transition-colors hover:border-brand-300 hover:bg-brand-50/40"
-    >
-      <span className="flex min-w-0 items-center gap-3">
-        <Film size={18} className="shrink-0 text-brand-600" />
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-medium text-slate-800">
-            {label}
-          </span>
-          <span className="block text-xs text-slate-500">
-            {video.source_type === 'youtube_url' ? 'YouTube import' : 'Upload'}
-            {video.duration_seconds
-              ? ` · ${formatDuration(video.duration_seconds)}`
-              : ''}
-            {` · added ${formatRelative(video.created_at)}`}
+    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 transition-colors hover:border-brand-300 hover:bg-brand-50/40">
+      <Link
+        to={`/videos/${video.id}`}
+        className="flex min-w-0 flex-1 items-center justify-between gap-4"
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <Film size={18} className="shrink-0 text-brand-600" />
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-medium text-slate-800">
+              {label}
+            </span>
+            <span className="block text-xs text-slate-500">
+              {video.source_type === 'youtube_url' ? 'YouTube import' : 'Upload'}
+              {video.duration_seconds
+                ? ` · ${formatDuration(video.duration_seconds)}`
+                : ''}
+              {` · added ${formatRelative(video.created_at)}`}
+            </span>
           </span>
         </span>
-      </span>
-      <StatusBadge status={video.status} />
-    </Link>
+        <StatusBadge status={video.status} />
+      </Link>
+      <button
+        type="button"
+        onClick={() => setConfirmOpen(true)}
+        aria-label={`Delete ${label}`}
+        className="shrink-0 rounded-full p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+      >
+        <Trash2 size={15} />
+      </button>
+
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={() => deleteVideo.mutateAsync(video.id)}
+        title="Delete this video?"
+        body="The source video, its transcript and every clip generated from it will be deleted."
+        confirmLabel="Delete video"
+      />
+    </div>
   );
 }
 
 export default function ProjectDetailPage() {
   const params = useParams();
+  const navigate = useNavigate();
   const id = Number(params.id);
   const projectId = Number.isFinite(id) ? id : undefined;
   const { data: project, isLoading, isError, refetch } = useProject(projectId);
   const { data: projectVideos } = useProjectVideos(projectId);
+  const deleteProject = useDeleteProject();
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (isLoading) {
     return (
@@ -103,9 +135,19 @@ export default function ProjectDetailPage() {
               <span>Created {formatDate(project.created_at)}</span>
             </div>
           </div>
-          <Link to={`/projects/${project.id}/upload`}>
-            <GradientButton type="button">Upload</GradientButton>
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="inline-flex items-center gap-2 rounded-full border border-red-200 px-5 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50"
+            >
+              <Trash2 size={16} />
+              Delete
+            </button>
+            <Link to={`/projects/${project.id}/upload`}>
+              <GradientButton type="button">Upload</GradientButton>
+            </Link>
+          </div>
         </div>
       </GlassCard>
 
@@ -131,6 +173,18 @@ export default function ProjectDetailPage() {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={async () => {
+          await deleteProject.mutateAsync(project.id);
+          navigate('/projects');
+        }}
+        title="Delete this project?"
+        body={`“${project.title}” and all of its source videos and clips will be permanently deleted. This cannot be undone.`}
+        confirmLabel="Delete project"
+      />
     </PageWrapper>
   );
 }

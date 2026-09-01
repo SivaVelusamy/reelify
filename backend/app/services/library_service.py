@@ -105,6 +105,9 @@ def list_clips(
         query = query.filter(Clip.project_id == project_id)
     if status is not None:
         query = query.filter(Clip.status == status)
+    else:
+        # Hide archived (deleted) clips unless the caller asks for them.
+        query = query.filter(Clip.status != ClipStatus.archived)
     if campaign is not None:
         query = query.join(Project, Clip.project_id == Project.id).filter(
             Project.campaign == campaign
@@ -166,6 +169,7 @@ def search(db: Session, user: User, q: str, *, limit: int = 50) -> list[SearchHi
             )
             .filter(
                 Clip.user_id == user.id,
+                Clip.status != ClipStatus.archived,
                 Clip.search_vector.isnot(None),
                 Clip.search_vector.op("@@")(tsquery),
             )
@@ -192,6 +196,7 @@ def search(db: Session, user: User, q: str, *, limit: int = 50) -> list[SearchHi
             .join(Transcript, Transcript.source_video_id == Clip.source_video_id)
             .filter(
                 Clip.user_id == user.id,
+                Clip.status != ClipStatus.archived,
                 Transcript.search_vector.isnot(None),
                 Transcript.search_vector.op("@@")(tsquery),
             )
@@ -225,6 +230,7 @@ def _search_ilike(db: Session, user: User, q: str, *, limit: int) -> list[Search
         .outerjoin(Transcript, Transcript.source_video_id == Clip.source_video_id)
         .filter(
             Clip.user_id == user.id,
+            Clip.status != ClipStatus.archived,
             or_(Clip.title.ilike(like), Transcript.full_text.ilike(like)),
         )
         .all()

@@ -19,6 +19,7 @@ import type {
 import {
   createExport,
   createManualClip,
+  deleteClip,
   getClip,
   getClipPreview,
   getExport,
@@ -129,6 +130,19 @@ export function useRenderClip(
     mutationFn: () => renderClip(clipId),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: clipKeys.detail(clipId) });
+    },
+  });
+}
+
+/** Delete a clip (archives rendered clips, hard-deletes suggestions). */
+export function useDeleteClip(): UseMutationResult<void, Error, number> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (clipId: number) => deleteClip(clipId),
+    onSuccess: (_data, clipId) => {
+      void qc.invalidateQueries({ queryKey: ['clips'] });
+      void qc.invalidateQueries({ queryKey: ['library'] });
+      void qc.removeQueries({ queryKey: clipKeys.detail(clipId) });
     },
   });
 }
